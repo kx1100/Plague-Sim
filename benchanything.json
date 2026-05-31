@@ -1,24 +1,79 @@
 {
-  "name": "plague-sim",
-  "version": "1.0.0",
+  "id": "plague-sim",
+  "adapter": "adapter.py",
+  "name": "Plague Sim",
   "description": "Infect and kill as much of humanity as possible before the cure completes. The agent plays the disease, evolving traits by spending DNA points.",
 
-  "entrypoint": {
-    "command": "python adapter.py --port {port}",
-    "default_port": 8080,
-    "startup_health_check": "GET /health",
-    "shutdown": "POST /close"
+  "binding_vow": {
+    "version": "1.0.0",
+    "tier": "tier1",
+    "description": "The agent controls a disease spreading across 71 countries. Each step it may evolve one trait (spending DNA points) or pass (null action). The simulation runs for up to 600 days. Maximise (infected + dead) fraction while slowing the cure.",
+
+    "observation_space": {
+      "type": "json",
+      "description": "{ day, dna, cure_progress, infected_pct, dead_pct, affected_pct, countries_infected, total_countries, disease: { infectivity, severity, lethality, air_transmission, water_transmission, bird_transmission, cold_resist, heat_resist, drug_resist, genetic_hardening }, evolved_traits: string[], available_traits: { trait_id: { name, cost, tree, desc } }, devolve_options: { trait_id: { name, refund, also_devolves: string[] } } }"
+    },
+
+    "action_space": {
+      "type": "text",
+      "description": "A trait_id string from observation.available_traits (e.g. 'Air1', 'Water1'), or null to skip this turn."
+    },
+
+    "reward": {
+      "type": "scalar",
+      "range": { "low": -0.5, "high": 3.0 },
+      "description": "infected_fraction + dead_fraction * 2.0 - cure_progress * 0.5. Theoretical max ~3.0 (all dead, cure at 0%)."
+    },
+
+    "episode": {
+      "max_steps": 600,
+      "deterministic_reset": false,
+      "supports_seed": true,
+      "parallel_episodes": 1,
+      "observability": "full"
+    },
+
+    "techniques": []
+  },
+
+  "scoring": {
+    "primary_metric": "plague_score",
+    "higher_is_better": true,
+    "metrics": [
+      {
+        "name": "plague_score",
+        "type": "terminal_field",
+        "aggregation": "mean",
+        "field": "plague_score"
+      },
+      {
+        "name": "affected_pct",
+        "type": "terminal_field",
+        "aggregation": "mean",
+        "field": "affected_pct"
+      },
+      {
+        "name": "dead_pct",
+        "type": "terminal_field",
+        "aggregation": "mean",
+        "field": "dead_pct"
+      },
+      {
+        "name": "days_to_infect_50pct",
+        "type": "terminal_field",
+        "aggregation": "mean",
+        "field": "days_to_infect_50pct"
+      }
+    ]
   },
 
   "env": {
     "file": "env.py",
     "class": "PlagueEnv",
-    "seed_param": "seed",
     "seed_types": ["string (country name)", "integer (random.seed + country index)", "null (random)"]
   },
 
-  "episode": {
-    "max_steps": 600,
+  "episode_detail": {
     "reset": {
       "endpoint": "POST /reset",
       "body": { "seed": "<string | integer | null>" },
@@ -26,141 +81,75 @@
     }
   },
 
-  "observation": {
-    "description": "Returned after every reset and step. Contains everything the agent is allowed to see.",
-    "fields": {
-      "day":               { "type": "integer",  "description": "Current simulation day. Starts at 0 after reset." },
-      "dna":               { "type": "integer",  "description": "DNA points available to spend on traits." },
-      "cure_progress":     { "type": "float",    "range": [0.0, 1.0], "description": "Fraction of cure research completed. Reaches 1.0 when humans win." },
-      "infected_pct":      { "type": "float",    "description": "Percentage of world population currently alive and infected." },
-      "dead_pct":          { "type": "float",    "description": "Percentage of world population killed by the disease." },
-      "affected_pct":      { "type": "float",    "description": "infected_pct + dead_pct combined." },
-      "countries_infected":{ "type": "integer",  "description": "Number of countries that have at least one infected person." },
-      "total_countries":   { "type": "integer",  "description": "Total countries in the simulation (71)." },
-      "disease": {
-        "type": "object",
-        "description": "Current numeric stats of the evolved disease.",
-        "fields": {
-          "infectivity":        "Base spread rate multiplier. Starts at 1.0.",
-          "severity":           "Visibility / symptom intensity. Raises cure speed and awareness.",
-          "lethality":          "Daily death probability per infected person.",
-          "air_transmission":   "Integer 0-2. Boosts airport spread and cold-climate spread.",
-          "water_transmission": "Integer 0-2. Boosts sea-route and humid-climate spread.",
-          "bird_transmission":  "Integer 0-2. Partially bypasses border closures.",
-          "cold_resist":        "Integer 0-2. Reduces cold-climate spread penalty.",
-          "heat_resist":        "Integer 0-2. Reduces arid-climate spread penalty.",
-          "drug_resist":        "Integer 0-2. Each level reduces cure research speed by 15%.",
-          "genetic_hardening":  "Integer 0-2. Each level reduces cure research speed by 15%."
-        }
-      },
-      "evolved_traits":    { "type": "array<string>", "description": "IDs of all traits already evolved." },
-      "available_traits": {
-        "type": "object",
-        "description": "Traits the agent can evolve RIGHT NOW (prereqs met AND cost ≤ current DNA). Keyed by trait_id.",
-        "entry_fields": {
-          "name":  "Display name.",
-          "cost":  "DNA cost.",
-          "tree":  "One of: transmission | symptom | ability.",
-          "desc":  "Plain-English effect description."
-        }
-      }
-    }
-  },
+  "action_rules": [
+    "action must be a key from observation.available_traits, the string 'devolve:<trait_id>', or null.",
+    "Evolve: action is a trait_id from observation.available_traits. Ignored if invalid, prereqs unmet, or insufficient DNA.",
+    "Devolve: action is 'devolve:<trait_id>' where trait_id is in observation.evolved_traits. Refunds a flat 2 DNA. Only that single trait is removed — dependent traits are NOT removed. Cure rollbacks from reshuffle traits are NOT reversed.",
+    "null (or omitted) action is a valid strategy — it advances the simulation one day without spending DNA, allowing DNA to accumulate from ongoing infections and deaths.",
+    "Each step is exactly one simulation day."
+  ],
 
-  "action": {
-    "description": "On each step the agent may evolve one trait or wait.",
-    "endpoint": "POST /step",
-    "body": { "action": "<trait_id string | null>" },
-    "rules": [
-      "action must be a key from observation.available_traits, or null.",
-      "If the key is invalid, has unmet prereqs, or costs more DNA than available, it is silently ignored.",
-      "null or omitted action advances the simulation without evolving anything.",
-      "Each step is exactly one simulation day."
-    ],
-    "returns": {
-      "observation": "<obs object>",
-      "reward":      "<float>",
-      "done":        "<boolean>",
-      "info": {
-        "day":             "Day after the step.",
-        "dna":             "DNA after the step.",
-        "cure_progress":   "Cure fraction after the step.",
-        "outcome":         "null while running; string when done (see Termination).",
-        "action_accepted": "true if trait was successfully evolved, false/null otherwise.",
-        "score":           "Final score object (only present when done=true)."
-      }
+  "step_response": {
+    "observation": "<obs object>",
+    "reward": "<float>",
+    "done": "<boolean>",
+    "info": {
+      "day": "Day after the step.",
+      "dna": "DNA after the step.",
+      "cure_progress": "Cure fraction after the step.",
+      "outcome": "null while running; string when done.",
+      "action_accepted": "true if trait was successfully evolved, false/null otherwise.",
+      "score": "Final score object (only present when done=true)."
     }
   },
 
   "traits": {
     "trees": {
       "transmission": "Increases infectivity and unlocks new spread pathways (air, water, birds, insects, animals).",
-      "symptom":      "Raises severity and/or lethality. Visible symptoms speed up cure research.",
-      "ability":      "Defensive upgrades: drug resistance, climate resistance, genetic hardening, reshuffles."
+      "symptom": "Raises severity and/or lethality. Visible symptoms speed up cure research.",
+      "ability": "Defensive upgrades: drug resistance, climate resistance, genetic hardening, reshuffles."
     },
     "notable": {
-      "Air1 / Air2":              "Airborne spread; boosts airport routes.",
-      "Water1 / Water2":          "Water-borne; boosts sea routes and humid climates.",
-      "Bird1 / Bird2":            "Avian vector; partially bypasses border closures.",
-      "ExtremeBioaerosol":        "Requires Air2 + Water2. Massive infectivity boost.",
-      "ExtremeZoonosis":          "Requires Livestock + Rodents + Bird2. Ignores most border controls.",
-      "DrugResistance1/2":        "Each level reduces cure research rate by 15%.",
-      "GeneticHardening1/2":      "Each level reduces cure research rate by 15%.",
-      "GeneticReShuffle1/2/3":    "One-time use. Rolls back cure progress by 25/40/60%.",
-      "Insanity":                 "Slows cure research globally by 10%.",
-      "TotalOrganFailure":        "Highest lethality trait. Requires Pneumonia + Paralysis."
+      "Air1 (9) / Air2 (14)":              "Airborne spread; boosts airport routes.",
+      "Water1 (9) / Water2 (15)":          "Water-borne; boosts sea routes and humid climates.",
+      "Bird1 (12) / Bird2 (18)":           "Avian vector; partially bypasses border closures.",
+      "ExtremeBioaerosol (16)":            "Requires Air2 + Water2. Massive infectivity boost.",
+      "ExtremeZoonosis (22)":              "Requires Livestock2 + Rodent2 + Bird2. Ignores most border controls.",
+      "ExtremeHematophagy (24)":           "Requires Insect2 + Blood2. Extreme spread in poor regions.",
+      "DrugResistance1 (11) / 2 (25)":    "Each level reduces cure research rate by 15%.",
+      "GeneticHardening1 (7) / 2 (22)":   "Each level reduces cure research rate by 15%.",
+      "GeneticReShuffle1/2/3 (17/21/25)": "One-time use. Rolls back cure progress by 25/40/60%.",
+      "Insanity (18)":                     "Requires Paranoia (which requires Insomnia). Slows cure 10%.",
+      "TotalOrganFailure (28)":            "Requires Pneumonia + Paralysis. Highest lethality trait."
     }
-  },
-
-  "reward": {
-    "formula": "infected_fraction + dead_fraction * 2.0 - cure_progress * 0.5",
-    "notes": [
-      "infected_fraction and dead_fraction are in [0, 1] (not percent).",
-      "Deaths are weighted 2× because they are permanent and irreversible.",
-      "Cure progress is penalised at 0.5× to encourage slowing the cure.",
-      "Theoretical max ≈ 3.0 (everyone dead, cure at 0%)."
-    ]
   },
 
   "termination": {
     "conditions": {
       "cured":        "cure_progress reached 1.0. Humans win. Disease failed.",
       "extinct":      "More than 95% of humanity is dead. Disease wins — total extinction.",
-      "infected_all": "All remaining healthy people are infected (no healthy population left). Disease wins.",
+      "infected_all": "All remaining healthy people are infected. Disease wins.",
       "died_out":     "Disease spontaneously went extinct before spreading. Occurs if infected reaches 0 after day 30."
     },
     "max_steps": 600,
     "max_steps_note": "Episode is also terminated by the benchmark harness after 600 steps regardless of outcome."
   },
 
-  "scoring": {
-    "primary_metric": "affected_pct",
-    "description":    "Higher is better. Measures what fraction of the world was infected or killed.",
-    "metrics": {
-      "affected_pct":          "Primary score. (infected + dead) / world_population × 100. Range [0, 100].",
-      "dead_pct":              "Lethality score. dead / world_population × 100.",
-      "days_to_infect_25pct":  "Speed metric. Day when affected_pct first crossed 25%. null if never reached.",
-      "days_to_infect_50pct":  "Speed metric. Day when affected_pct first crossed 50%. null if never reached.",
-      "days_to_infect_75pct":  "Speed metric. Day when affected_pct first crossed 75%. null if never reached.",
-      "cure_progress_pct":     "How close humans were to winning. Lower means agent did better.",
-      "outcome":               "Terminal state string (see Termination)."
-    },
-    "ranking": "Agents are ranked by affected_pct descending, then dead_pct descending, then days_to_infect_50pct ascending."
-  },
+  "ranking": "Agents are ranked by affected_pct descending, then dead_pct descending, then days_to_infect_50pct ascending.",
 
   "world": {
     "countries": 71,
     "total_population": 7093316000,
     "climates": {
-      "temperate": "Baseline spread (1.0×). Most of Europe, East Asia, Americas.",
-      "humid":     "Boosted spread (1.1–1.3×). SE Asia, Sub-Saharan Africa, South America.",
-      "arid":      "Reduced spread (0.5–1.0×) unless heat_resist evolved. Middle East, North Africa, Australia.",
-      "cold":      "Strongly reduced spread (0.3–1.0×) unless cold_resist evolved. Russia, Scandinavia, Canada."
+      "temperate": "Baseline spread (1.0x). Most of Europe, East Asia, Americas.",
+      "humid":     "Boosted spread (1.1-1.3x). SE Asia, Sub-Saharan Africa, South America.",
+      "arid":      "Reduced spread (0.5-1.0x) unless heat_resist evolved. Middle East, North Africa, Australia.",
+      "cold":      "Strongly reduced spread (0.3-1.0x) unless cold_resist evolved. Russia, Scandinavia, Canada."
     },
     "connectivity": {
-      "land_borders": "Countries connected by land borders spread disease daily. Awareness closes borders.",
-      "airports":     "Rating 0-3. Countries with airports can seed any other airport country each tick.",
-      "ports":        "Rating 0-3. Countries with ports can seed any other port country each tick.",
+      "land_borders":   "Countries connected by land borders spread disease daily. Awareness closes borders.",
+      "airports":       "Rating 0-3. Countries with airports can seed any other airport country each tick.",
+      "ports":          "Rating 0-3. Countries with ports can seed any other port country each tick.",
       "border_closure": "When a country's awareness exceeds 0.5 (airports) or 0.6 (ports) its routes close. Bird transmission partially bypasses closures."
     }
   }

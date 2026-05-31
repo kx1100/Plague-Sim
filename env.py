@@ -8,7 +8,7 @@ Observation  : aggregate statistics + available actions exposed to the agent.
 import random as _random
 
 from models.game_state import GameState
-from simulation.actions import evolve_trait
+from simulation.actions import evolve_trait, devolve_trait
 from data.traits import get_affordable_traits, TRAITS
 
 
@@ -57,16 +57,21 @@ class PlagueEnv:
 
     def step(self, action: str | None = None) -> tuple[dict, float, bool, dict]:
         """
-        action : trait_id string to evolve (e.g. "Air1"), or None to wait.
+        action : trait_id to evolve (e.g. "Air1"), "devolve:TraitId" to devolve, or None to wait.
         Returns (observation, reward, done, info).
-        action is silently ignored if invalid (wrong prereqs, insufficient DNA, etc.).
+        Invalid actions are silently ignored.
         """
         if self.game is None:
             raise RuntimeError("Call reset() before step().")
 
         action_result = None
         if action is not None:
-            action_result = evolve_trait(self.game, action)
+            if action.startswith("devolve:"):
+                trait_id = action[len("devolve:"):]
+                refunded = devolve_trait(self.game, trait_id)
+                action_result = refunded > 0
+            else:
+                action_result = evolve_trait(self.game, action)
 
         self.game.step()
         self._record_milestones()
@@ -123,6 +128,13 @@ class PlagueEnv:
                     g.disease.evolved, g.dna
                 ).items()
             },
+            "devolve_options": {
+                tid: {
+                    "name": TRAITS[tid]["name"],
+                    "refund": 2,
+                }
+                for tid in sorted(g.disease.evolved)
+            },
         }
 
     # ── Render (human-readable snapshot) ──────────────────────────────────────
@@ -155,6 +167,7 @@ class PlagueEnv:
         return {
             "outcome": g.outcome,
             "day": g.day,
+            "plague_score": self._plague_score(),
             "infected_pct": round(infected / total * 100, 2),
             "dead_pct": round(dead / total * 100, 2),
             "affected_pct": round((infected + dead) / total * 100, 2),
@@ -169,13 +182,44 @@ class PlagueEnv:
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
+    def _plague_score(self) -> float:
+        """
+        Plague Inc score formula (Normal difficulty, Bacteria):
+          Score = 10 * [(S * DNA * D * P) / (C * Time) + DeathPercentage * 100]
+          S    = disease severity
+          DNA  = remaining_dna * 2 + spent_dna (sum of evolved trait costs)
+          D    = 4  (Normal difficulty)
+          P    = 1  (Bacteria plague adjustment)
+          C    = cure progress % clamped to [1, 100]
+          Time = game days elapsed (clamped >= 1)
+          DeathPercentage = dead / total_population, clamped to [0, 0.9999]
+        """
+        g = self.game
+        total = g.total_population()
+        if total == 0:
+            return 0.0
+
+        S = g.disease.severity
+        spent_dna = sum(TRAITS[tid]["cost"] for tid in g.disease.evolved)
+        DNA_val = g.dna * 2 + spent_dna
+        D, P = 4, 1
+        C = max(1.0, min(100.0, g.cure_progress * 100))
+        time_val = max(1, g.day)
+        death_pct = min(0.9999, g.total_dead() / total)
+
+        score = 10 * ((S * DNA_val * D * P) / (C * time_val) + death_pct * 100)
+        return round(score, 2)
+
     def _reward(self) -> float:
         g = self.game
-        return (
+        step_reward = (
             g.percentage_infected()
             + g.percentage_dead() * 2.0
             - g.cure_progress * 0.5
         )
+        if g.game_over:
+            step_reward += self._plague_score() / 100.0
+        return step_reward
 
     def _record_milestones(self) -> None:
         g = self.game
