@@ -16,9 +16,11 @@ class PlagueEnv:
 
     def __init__(self):
         self.game: GameState | None = None
+        self.action_history: list[str] = []
 
     def reset(self, seed_country: str = None) -> dict:
         self.game = GameState()
+        self.action_history = []
         if seed_country is None:
             seed_country = random.choice(list(self.game.countries.keys()))
         self.game.countries[seed_country].infected = 100
@@ -29,8 +31,11 @@ class PlagueEnv:
         action: trait_id string to evolve, or None to skip.
         Returns: (observation, reward, done, info)
         """
+        self.action_history.append(action)
+
+        action_valid = None
         if action is not None:
-            evolve_trait(self.game, action)
+            action_valid = evolve_trait(self.game, action)
 
         self.game.step()
 
@@ -43,6 +48,7 @@ class PlagueEnv:
             "cure_progress": round(self.game.cure_progress, 4),
             "outcome": self.game.outcome,
             "score": self.game.score(),
+            "action_valid": action_valid,
         }
         return obs, reward, done, info
 
@@ -55,6 +61,7 @@ class PlagueEnv:
             "dead_pct": round(self.game.percentage_dead() * 100, 2),
             "countries_infected": self.game.infected_countries(),
             "total_countries": len(self.game.countries),
+            "action_history": self.action_history,
             "evolved_traits": sorted(self.game.disease.evolved),
             "available_traits": {
                 tid: {

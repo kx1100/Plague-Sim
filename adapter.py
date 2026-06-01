@@ -17,6 +17,7 @@ import json
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+from data.traits import TRAITS, get_affordable_traits
 from env import PlagueEnv
 
 _env = PlagueEnv()
@@ -35,7 +36,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/health":
             self._send_json({"status": "ok", "ready": _env.game is not None})
         elif self.path == "/render":
-            self._send_json({"render": _env.render()})
+            obs = _env.observation() if _env.game is not None else {}
+            self._send_json({"render": obs})
         else:
             self._send_json({"error": f"Unknown route: {self.path}"}, status=404)
 
@@ -55,7 +57,31 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"error": "Call /reset first."}, status=400)
                 return
             action = body.get("action", None)
+            action_error = None
+            if action is not None:
+                evolved = _env.game.disease.evolved
+                affordable = get_affordable_traits(evolved, _env.game.dna)
+                # Normalise natural-language output from weak models.
+                # Matching against affordable only means already-evolved tiers
+                # are skipped and the next available tier is returned instead.
+                normalised = self._fuzzy_trait(action, affordable)
+                if normalised and normalised != action:
+                    action = normalised
+                if action in evolved:
+                    action_error = f"'{action}' is already evolved."
+                    action = None
+                elif action not in TRAITS:
+                    action_error = f"'{action}' is not a valid trait ID."
+                    action = None
+                elif action not in affordable:
+                    action_error = f"'{action}' is not available (prereqs unmet or insufficient DNA)."
+                    action = None
             obs, reward, done, info = _env.step(action)
+            if action_error:
+                info["action_error"] = action_error
+                info["available_traits"] = list(get_affordable_traits(
+                    _env.game.disease.evolved, _env.game.dna
+                ).keys())
             self._send_json({
                 "observation": obs,
                 "reward": round(reward, 6),
@@ -71,6 +97,41 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": f"Unknown route: {self.path}"}, status=404)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _fuzzy_trait(raw: str, affordable: dict) -> str | None:
+        """
+        Try to extract a trait ID from a natural-language action string,
+        matching only against affordable (unevolved + affordable) traits so that
+        already-evolved traits are never returned.
+
+        Matching passes (most → least strict):
+          1. Exact trait ID present in affordable
+          2. Trait ID appears as substring (case-insensitive)
+          3. Trait ID stem (digits stripped) appears in raw alpha chars
+             e.g. "cold_resist" → ColdResist2 if ColdResist1 is already evolved
+          4. Trait name (alpha only) appears in raw alpha chars
+        """
+        if raw in affordable:
+            return raw
+        raw_alpha = "".join(c for c in raw.lower() if c.isalpha())
+        raw_lower = raw.lower()
+
+        for tid in affordable:
+            if tid.lower() in raw_lower:
+                return tid
+
+        for tid in affordable:
+            stem = tid.lower().rstrip("0123456789")
+            if len(stem) >= 4 and stem in raw_alpha:
+                return tid
+
+        for tid in affordable:
+            name_alpha = "".join(c for c in TRAITS[tid]["name"].lower() if c.isalpha())
+            if len(name_alpha) >= 4 and name_alpha in raw_alpha:
+                return tid
+
+        return None
 
     def _read_body(self) -> dict:
         length = int(self.headers.get("Content-Length", 0))

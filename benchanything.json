@@ -16,7 +16,7 @@
 
     "action_space": {
       "type": "text",
-      "description": "A trait_id string from observation.available_traits (e.g. 'Air1', 'Water1'), or null to skip this turn."
+      "description": "A trait_id string from observation.available_traits (must be a key listed there), or null to skip this turn and accumulate DNA."
     },
 
     "reward": {

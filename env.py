@@ -135,6 +135,7 @@ class PlagueEnv:
                 }
                 for tid in sorted(g.disease.evolved)
             },
+            "action_hint": self._action_hint(g),
         }
 
     # ── Render (human-readable snapshot) ──────────────────────────────────────
@@ -220,6 +221,27 @@ class PlagueEnv:
         if g.game_over:
             step_reward += self._plague_score() / 100.0
         return step_reward
+
+    def _action_hint(self, g) -> str:
+        affordable = get_affordable_traits(g.disease.evolved, g.dna)
+        evolved_list = sorted(g.disease.evolved)
+        already = f" Already evolved (do not pick): {', '.join(evolved_list)}." if evolved_list else ""
+        if affordable:
+            ids = sorted(affordable.keys())
+            return (
+                f"DNA={g.dna}.{already} "
+                f"Traits you can evolve right now: {', '.join(ids)}. "
+                f"Output exactly one of these trait IDs."
+            )
+        cheapest_cost = min(
+            (t["cost"] for tid, t in TRAITS.items() if tid not in g.disease.evolved),
+            default=0,
+        )
+        return (
+            f"DNA={g.dna}.{already} "
+            f"Cheapest unevolved trait costs {cheapest_cost}. "
+            f"Cannot evolve anything yet. Output: null"
+        )
 
     def _record_milestones(self) -> None:
         g = self.game
