@@ -82,12 +82,18 @@ class Handler(BaseHTTPRequestHandler):
                 info["available_traits"] = list(get_affordable_traits(
                     _env.game.disease.evolved, _env.game.dna
                 ).keys())
-            self._send_json({
+            response = {
                 "observation": obs,
                 "reward": round(reward, 6),
                 "done": done,
                 "info": info,
-            })
+            }
+            if done:
+                for key in ("plague_score", "affected_pct", "dead_pct",
+                            "days_to_infect_50pct", "outcome", "day"):
+                    if key in info:
+                        response[key] = info[key]
+            self._send_json(response)
 
         elif self.path == "/close":
             _env.game = None

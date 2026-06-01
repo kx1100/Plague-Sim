@@ -185,7 +185,7 @@ class PlagueEnv:
 
         score = 10 * ((S * DNA_val * D * P) / (C * time_val) + death_pct * 100)
         affected_pct = (g.total_infected() + g.total_dead()) / total
-        score += affected_pct * 50
+        score += affected_pct * 1000
         return round(score, 2)
 
     def _reward(self) -> float:
