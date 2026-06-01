@@ -85,8 +85,11 @@ class PlagueEnv:
             "cure_progress": round(self.game.cure_progress, 4),
             "outcome": self.game.outcome,
             "action_accepted": action_result,
-            "score": self.final_score() if done else None,
         }
+        if done:
+            terminal = self.final_score()
+            info["score"] = terminal
+            info.update(terminal)
         return obs, reward, done, info
 
     # ── Observation (what the agent sees) ─────────────────────────────────────
