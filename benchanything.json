@@ -11,7 +11,7 @@
 
     "observation_space": {
       "type": "json",
-      "description": "{ day, dna, cure_progress, infected_pct, dead_pct, affected_pct, countries_infected, total_countries, disease: { infectivity, severity, lethality, air_transmission, water_transmission, bird_transmission, cold_resist, heat_resist, drug_resist, genetic_hardening }, evolved_traits: string[], available_traits: { trait_id: { name, cost, tree, desc } }, devolve_options: { trait_id: { name, refund, also_devolves: string[] } } }"
+      "description": "{ day, dna, cure_progress, infected_pct, dead_pct, countries_infected, evolved_traits: string[], available_traits: { trait_id: { name, cost, tree } } }"
     },
 
     "action_space": {
@@ -105,52 +105,26 @@
 
   "traits": {
     "trees": {
-      "transmission": "Increases infectivity and unlocks new spread pathways (air, water, birds, insects, animals).",
-      "symptom": "Raises severity and/or lethality. Visible symptoms speed up cure research.",
-      "ability": "Defensive upgrades: drug resistance, climate resistance, genetic hardening, reshuffles."
-    },
-    "notable": {
-      "Air1 (9) / Air2 (14)":              "Airborne spread; boosts airport routes.",
-      "Water1 (9) / Water2 (15)":          "Water-borne; boosts sea routes and humid climates.",
-      "Bird1 (12) / Bird2 (18)":           "Avian vector; partially bypasses border closures.",
-      "ExtremeBioaerosol (16)":            "Requires Air2 + Water2. Massive infectivity boost.",
-      "ExtremeZoonosis (22)":              "Requires Livestock2 + Rodent2 + Bird2. Ignores most border controls.",
-      "ExtremeHematophagy (24)":           "Requires Insect2 + Blood2. Extreme spread in poor regions.",
-      "DrugResistance1 (11) / 2 (25)":    "Each level reduces cure research rate by 15%.",
-      "GeneticHardening1 (7) / 2 (22)":   "Each level reduces cure research rate by 15%.",
-      "GeneticReShuffle1/2/3 (17/21/25)": "One-time use. Rolls back cure progress by 25/40/60%.",
-      "Insanity (18)":                     "Requires Paranoia (which requires Insomnia). Slows cure 10%.",
-      "TotalOrganFailure (28)":            "Requires Pneumonia + Paralysis. Highest lethality trait."
+      "transmission": "Boosts infectivity and spread routes (air, water, birds, insects, animals).",
+      "symptom": "Raises severity/lethality; speeds up cure research.",
+      "ability": "Defensive: drug/climate resistance, genetic hardening, cure reshuffles."
     }
   },
 
   "termination": {
     "conditions": {
-      "cured":        "cure_progress reached 1.0. Humans win. Disease failed.",
-      "extinct":      "More than 95% of humanity is dead. Disease wins — total extinction.",
-      "infected_all": "All remaining healthy people are infected. Disease wins.",
-      "died_out":     "Disease spontaneously went extinct before spreading. Occurs if infected reaches 0 after day 30."
+      "cured": "cure_progress = 1.0 — disease failed.",
+      "extinct": "95%+ humanity dead — disease wins.",
+      "infected_all": "No healthy people remain — disease wins.",
+      "died_out": "infected = 0 after day 30 — disease died out."
     },
-    "max_steps": 600,
-    "max_steps_note": "Episode is also terminated by the benchmark harness after 600 steps regardless of outcome."
+    "max_steps": 600
   },
 
-  "ranking": "Agents are ranked by affected_pct descending, then dead_pct descending, then days_to_infect_50pct ascending.",
+  "ranking": "Ranked by affected_pct desc, dead_pct desc, days_to_infect_50pct asc.",
 
   "world": {
     "countries": 71,
-    "total_population": 7093316000,
-    "climates": {
-      "temperate": "Baseline spread (1.0x). Most of Europe, East Asia, Americas.",
-      "humid":     "Boosted spread (1.1-1.3x). SE Asia, Sub-Saharan Africa, South America.",
-      "arid":      "Reduced spread (0.5-1.0x) unless heat_resist evolved. Middle East, North Africa, Australia.",
-      "cold":      "Strongly reduced spread (0.3-1.0x) unless cold_resist evolved. Russia, Scandinavia, Canada."
-    },
-    "connectivity": {
-      "land_borders":   "Countries connected by land borders spread disease daily. Awareness closes borders.",
-      "airports":       "Rating 0-3. Countries with airports can seed any other airport country each tick.",
-      "ports":          "Rating 0-3. Countries with ports can seed any other port country each tick.",
-      "border_closure": "When a country's awareness exceeds 0.5 (airports) or 0.6 (ports) its routes close. Bird transmission partially bypasses closures."
-    }
+    "total_population": 7093316000
   }
 }

@@ -103,23 +103,7 @@ class PlagueEnv:
             "cure_progress": round(g.cure_progress, 4),
             "infected_pct": round(g.percentage_infected() * 100, 2),
             "dead_pct": round(g.percentage_dead() * 100, 2),
-            "affected_pct": round(
-                (g.percentage_infected() + g.percentage_dead()) * 100, 2
-            ),
             "countries_infected": g.infected_countries(),
-            "total_countries": len(g.countries),
-            "disease": {
-                "infectivity": round(g.disease.infectivity, 3),
-                "severity": round(g.disease.severity, 3),
-                "lethality": round(g.disease.lethality, 3),
-                "air_transmission": g.disease.air_transmission,
-                "water_transmission": g.disease.water_transmission,
-                "bird_transmission": g.disease.bird_transmission,
-                "cold_resist": g.disease.cold_resist,
-                "heat_resist": g.disease.heat_resist,
-                "drug_resist": g.disease.drug_resist,
-                "genetic_hardening": g.disease.genetic_hardening,
-            },
             "evolved_traits": sorted(g.disease.evolved),
             "available_traits": {
                 tid: {"name": t["name"], "cost": t["cost"], "tree": t["tree"]}
@@ -127,8 +111,6 @@ class PlagueEnv:
                     g.disease.evolved, g.dna
                 ).items()
             },
-            "devolve_options": sorted(g.disease.evolved),
-            "action_hint": self._action_hint(g),
         }
 
     # ── Render (human-readable snapshot) ──────────────────────────────────────
