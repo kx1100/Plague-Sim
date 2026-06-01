@@ -122,23 +122,12 @@ class PlagueEnv:
             },
             "evolved_traits": sorted(g.disease.evolved),
             "available_traits": {
-                tid: {
-                    "name": t["name"],
-                    "cost": t["cost"],
-                    "tree": t["tree"],
-                    "desc": t["desc"],
-                }
+                tid: {"name": t["name"], "cost": t["cost"], "tree": t["tree"]}
                 for tid, t in get_affordable_traits(
                     g.disease.evolved, g.dna
                 ).items()
             },
-            "devolve_options": {
-                tid: {
-                    "name": TRAITS[tid]["name"],
-                    "refund": 2,
-                }
-                for tid in sorted(g.disease.evolved)
-            },
+            "devolve_options": sorted(g.disease.evolved),
             "action_hint": self._action_hint(g),
         }
 
