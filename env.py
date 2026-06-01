@@ -53,6 +53,7 @@ class PlagueEnv:
             self._seed_country = _random.choice(country_names)
 
         self.game.countries[self._seed_country].infected = 100
+        self.game.dna = 15
         return self.observation()
 
     def step(self, action: str | None = None) -> tuple[dict, float, bool, dict]:
@@ -212,6 +213,8 @@ class PlagueEnv:
         death_pct = min(0.9999, g.total_dead() / total)
 
         score = 10 * ((S * DNA_val * D * P) / (C * time_val) + death_pct * 100)
+        affected_pct = (g.total_infected() + g.total_dead()) / total
+        score += affected_pct * 50
         return round(score, 2)
 
     def _reward(self) -> float:
