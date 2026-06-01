@@ -52,7 +52,7 @@ class PlagueEnv:
         else:
             self._seed_country = _random.choice(country_names)
 
-        self.game.countries[self._seed_country].infected = 100
+        self.game.countries[self._seed_country].infected = 500_000
         self.game.dna = 15
         return self.observation()
 
