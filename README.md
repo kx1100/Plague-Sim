@@ -152,8 +152,28 @@ affordable traits, so an already-evolved tier is skipped in favour of the next
 one up. It matches trait IDs, ID stems and trait names of four characters or
 more, so short IDs written with a space (`"Air 1"`) are not recovered.
 
-See [LOCAL_DEV.md](LOCAL_DEV.md) for the full Ollama dev loop and the Mesocosm
-submission commands.
+### Running episodes
+
+[tools/bench_local.py](tools/bench_local.py) drives the whole benchmark — reset,
+prompt a model, step, repeat, then average the terminal fields named in
+`benchanything.json`. It is the `mesocosm run local` loop with no dependency on
+the Mesocosm CLI or platform, so it also works when they are unavailable:
+
+```bash
+python adapter.py                                       # terminal 1
+python tools/bench_local.py --model ollama/llama3.2     # terminal 2
+python tools/bench_local.py --model policy/expert       # no LLM: the baseline
+python tools/bench_local.py --model anthropic/claude-opus-5 --probe
+```
+
+Backends are `ollama/*`, `anthropic/*`, `openai/*` (any `/v1/chat/completions`
+endpoint, which is how Gemini is reached), and `policy/*` for the reference
+policies from [tools/calibrate.py](tools/calibrate.py). A run against a cloud
+model is ~600 calls per episode, so the spend guards — `--probe`, `--max-calls`,
+`--max-cost`, `--skip-idle` — are on by default.
+
+See [LOCAL_DEV.md](LOCAL_DEV.md) for the full flag table, the Ollama dev loop and
+the Mesocosm submission commands.
 
 ## Watching a run back
 
@@ -161,9 +181,14 @@ submission commands.
 the chart, a 71-country map, the model's reasoning and the trait it bought each
 turn. Open the file directly; there is no build step and nothing is fetched.
 
-It uses a real exported run at `showcase/data/replay.json` when there is one
-(`mesocosm run export RUN_ID -o showcase/data/replay.json`) and otherwise falls
-back to a bundled sample of the reference expert policy, saying so on screen.
+It uses a real exported run at `showcase/data/replay.json` when there is one and
+otherwise falls back to a bundled sample of the reference expert policy, saying
+so on screen. Either harness writes that file:
+
+```bash
+python tools/bench_local.py --model ollama/llama3.2 --episodes 1   --export showcase/data/replay.json          # local run
+mesocosm run export RUN_ID -o showcase/data/replay.json    # platform run
+```
 See [showcase/README.md](showcase/README.md).
 
 ## Balance and calibration
@@ -250,7 +275,8 @@ data/                  countries.py, traits.py (the 60-trait tree)
 models/                Country, Disease, GameState, world_builder
 simulation/            spread, deaths, cure, dna, actions
 tools/calibrate.py     balance harness and acceptance targets
-tests/                 96 tests: sim mechanics, env lifecycle, adapter, balance
+tools/bench_local.py   run the benchmark against a model, without Mesocosm
+tests/                 126 tests: sim mechanics, env lifecycle, adapter, balance, harness
 showcase/index.html    replay UI -- open it directly, no build step
 tools/make_example_replay.py  regenerates the showcase's bundled sample
 ```

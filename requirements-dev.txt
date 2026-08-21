@@ -7,3 +7,8 @@
 #   .venv/Scripts/python.exe -m pip install -r requirements-dev.txt
 
 pytest>=8.0
+
+# Only for `tools/bench_local.py --model anthropic/...`. The ollama, openai and
+# policy backends use the stdlib, so this stays optional -- install it when you
+# want to bench a Claude model.
+# anthropic>=0.40

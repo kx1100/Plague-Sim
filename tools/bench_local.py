@@ -1,0 +1,926 @@
+"""
+bench_local.py — run the benchmark without Mesocosm.
+
+`mesocosm run local` is a driver loop, not infrastructure: reset the adapter,
+prompt a model with the observation, post the action back, repeat to done, then
+average the terminal fields named in benchanything.json. This is that loop, with
+no dependency on the Mesocosm CLI or platform.
+
+It drives the adapter over HTTP rather than importing PlagueEnv, because the
+natural-language action normalisation lives in adapter.py -- an in-process
+harness would reject output that a hosted agent's would accept, and score the
+model on plumbing it never sees.
+
+Usage:
+    python adapter.py                      # terminal 1
+    python tools/bench_local.py            # terminal 2 (ollama/llama3.2)
+
+    python tools/bench_local.py --model policy/expert          # no LLM, baseline
+    python tools/bench_local.py --model anthropic/claude-opus-5 --max-cost 2.00
+    python tools/bench_local.py --model openai/gpt-5 --base-url ... --api-key-env ...
+    python tools/bench_local.py --model anthropic/claude-opus-5 --probe
+
+Spend guards, for the paid backends:
+    --probe            one call, printed in full, then exit -- check the
+                       plumbing before committing to a run
+    --max-calls N      hard ceiling on model calls for the whole run
+                       (default: episodes x max-steps, the true worst case)
+    --max-cost USD     hard ceiling on estimated spend (default 5.00 for paid
+                       backends, 0 to disable)
+    --skip-idle        no call on days where nothing is affordable
+    Any 4xx that is not a rate limit aborts immediately, so a bad key or a bad
+    model id costs one call rather than six hundred.
+
+A tripped budget stops the run and reports the episodes that finished; it never
+throws the completed work away.
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from tools.calibrate import POLICIES, DEFAULT_SEEDS      # noqa: E402
+
+# Anthropic list prices, USD per million tokens (input, output). Used only to
+# estimate spend against --max-cost; --price-in/--price-out override for any
+# model that is not listed, including every non-Anthropic one.
+ANTHROPIC_PRICES = {
+    "claude-fable-5": (10.00, 50.00),
+    "claude-mythos-5": (10.00, 50.00),
+    "claude-opus-5": (5.00, 25.00),
+    "claude-opus-4-8": (5.00, 25.00),
+    "claude-opus-4-7": (5.00, 25.00),
+    "claude-opus-4-6": (5.00, 25.00),
+    "claude-sonnet-5": (3.00, 15.00),
+    "claude-sonnet-4-6": (3.00, 15.00),
+    "claude-haiku-4-5": (1.00, 5.00),
+}
+
+_PAID_BACKENDS = ("anthropic", "openai")
+_NULL_WORDS = {
+    "null", "none", "nothing", "pass", "wait", "skip", "hold", "no action",
+    "noop", "no-op", "n/a", "-", "",
+}
+
+
+# ── Failures ──────────────────────────────────────────────────────────────────
+
+class BudgetExceeded(Exception):
+    """A spend guard tripped. The run stops and reports what it has."""
+
+
+class FatalAgentError(Exception):
+    """Not worth retrying: bad key, bad model id, malformed request."""
+
+
+class TransientAgentError(Exception):
+    """Worth retrying: rate limit, 5xx, connection dropped."""
+
+
+# ── Spend guard ───────────────────────────────────────────────────────────────
+
+class Budget:
+    """
+    Hard ceilings on a run. Every backend reports usage through `record`, and
+    every call site checks `guard` before spending, so a run can overshoot a
+    limit by at most one call.
+    """
+
+    def __init__(self, max_calls: int, max_cost: float, price_in: float, price_out: float):
+        self.max_calls = max_calls
+        self.max_cost = max_cost          # 0 disables the cost ceiling
+        self.price_in = price_in          # USD per 1M tokens, 0 = unknown
+        self.price_out = price_out
+        self.calls = 0
+        self.tokens_in = 0
+        self.tokens_out = 0
+        self.tokens_cached = 0
+        self.skipped = 0                  # days answered without a model call
+
+    @property
+    def cost(self) -> float:
+        """Estimated USD. Cache reads bill at ~0.1x input, so they are cheap
+        but not free; unknown prices estimate as 0 and the ceiling is inert."""
+        billed_in = self.tokens_in + self.tokens_cached * 0.1
+        return (billed_in * self.price_in + self.tokens_out * self.price_out) / 1_000_000
+
+    @property
+    def priced(self) -> bool:
+        return self.price_in > 0 or self.price_out > 0
+
+    def guard(self):
+        if self.max_calls and self.calls >= self.max_calls:
+            raise BudgetExceeded(f"call ceiling reached ({self.max_calls} calls)")
+        if self.max_cost and self.priced and self.cost >= self.max_cost:
+            raise BudgetExceeded(
+                f"cost ceiling reached (${self.cost:.2f} of ${self.max_cost:.2f})"
+            )
+
+    def record(self, tokens_in: int = 0, tokens_out: int = 0, cached: int = 0):
+        self.calls += 1
+        self.tokens_in += tokens_in
+        self.tokens_out += tokens_out
+        self.tokens_cached += cached
+
+    def summary(self) -> str:
+        parts = [f"{self.calls} calls"]
+        if self.skipped:
+            parts.append(f"{self.skipped} days auto-passed")
+        if self.tokens_in or self.tokens_out:
+            parts.append(f"{self.tokens_in:,} in / {self.tokens_out:,} out tokens")
+        if self.tokens_cached:
+            parts.append(f"{self.tokens_cached:,} cached")
+        if self.priced:
+            parts.append(f"~${self.cost:.2f}")
+        return " | ".join(parts)
+
+
+# ── Prompting ─────────────────────────────────────────────────────────────────
+
+# Only the fields an agent can act on. `available_traits` is the expensive one
+# and it is the whole decision, so it stays; the rest is state it needs to weigh
+# spending now against spending later.
+_PROMPT_KEYS = (
+    "day", "dna", "dna_earned", "cure_progress", "infected_pct", "dead_pct",
+    "victory_progress", "countries_infected", "evolved_traits",
+    "devolve_options", "available_traits",
+)
+
+
+def build_system_prompt(manifest: dict, extra: str | None) -> str:
+    vow = manifest["binding_vow"]
+    rules = "\n".join(f"- {r}" for r in manifest.get("action_rules", []))
+    trees = "\n".join(
+        f"- {name}: {desc}"
+        for name, desc in manifest.get("traits", {}).get("trees", {}).items()
+    )
+    parts = [
+        f"You are the agent in the '{manifest['name']}' benchmark environment.",
+        manifest["description"],
+        "",
+        vow["description"],
+        "",
+        "OBSERVATION FIELDS",
+        "\n".join(
+            f"- {k}: {v}" for k, v in vow["observation_space"]["fields"].items()
+        ),
+        "",
+        "TRAIT TREES",
+        trees,
+        "",
+        "ACTION RULES",
+        rules,
+        "",
+        f"REWARD: {vow['reward']['description']}",
+        f"SCORING: ranked by {manifest['scoring']['primary_metric']}. "
+        f"{manifest.get('ranking', '')}",
+        "",
+        "Each turn, reply in exactly this format and nothing else:",
+        "REASON: <one short sentence>",
+        "ACTION: <trait_id from available_traits | devolve:<trait_id> | null>",
+        "",
+        "ACTION must be a bare trait id with no quotes or punctuation. Use null "
+        "to bank DNA for a more expensive trait later — it is a legitimate move, "
+        "not a wasted turn.",
+    ]
+    if extra:
+        parts += ["", extra]
+    return "\n".join(parts)
+
+
+def build_user_prompt(obs: dict, history: list[str]) -> str:
+    board = {k: obs[k] for k in _PROMPT_KEYS if k in obs}
+    lines = []
+    if history:
+        lines += ["RECENT TURNS", *history, ""]
+    lines += [
+        "OBSERVATION",
+        json.dumps(board, indent=2, sort_keys=True),
+        "",
+        obs.get("action_hint", ""),
+        "",
+        "Your move. REASON then ACTION.",
+    ]
+    return "\n".join(lines)
+
+
+def parse_reply(text: str) -> tuple[str | None, str]:
+    """
+    Pull (action, reasoning) out of a model reply.
+
+    Deliberately lenient on the action: whatever survives here still goes
+    through the adapter's own fuzzy matcher, which is the behaviour a hosted
+    agent gets. Being stricter here would score models on format compliance
+    that the real harness forgives.
+    """
+    reasoning, action_line = "", None
+    for line in text.splitlines():
+        stripped = line.strip().lstrip("*# ").strip()
+        if not stripped:
+            continue
+        low = stripped.lower()
+        if low.startswith("reason"):
+            reasoning = stripped.split(":", 1)[-1].strip()
+        elif low.startswith("action"):
+            action_line = stripped.split(":", 1)[-1].strip()
+
+    if action_line is None:
+        # No ACTION line. Take the last non-empty line as the answer and treat
+        # everything before it as the reasoning -- the common shape when a
+        # weaker model narrates first and names the trait last.
+        lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+        if not lines:
+            return None, ""
+        action_line = lines[-1]
+        reasoning = reasoning or " ".join(lines[:-1])[:500]
+
+    return _clean_action(action_line), (reasoning or action_line)[:500]
+
+
+def _clean_action(raw: str) -> str | None:
+    # Backticks and asterisks first: "**ACTION:** Air1" leaves a stray "**"
+    # on the value once the label is split off, and bold is what models reach
+    # for when asked to emphasise a field.
+    action = raw.strip().strip("`*").strip()
+    if action.startswith("{"):
+        try:
+            action = str(json.loads(action).get("action", ""))
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    action = action.strip().strip("\"'`*").rstrip(".!,").strip()
+    if action.lower() in _NULL_WORDS:
+        return None
+    # The adapter matches trait names and stems inside free text, so a long
+    # reply is still usable; cap it so a runaway response is not posted whole.
+    return action[:500]
+
+
+# ── Agents ────────────────────────────────────────────────────────────────────
+
+class Agent:
+    """Turns an observation into (action, reasoning)."""
+
+    uses_model = True
+
+    def act(self, obs: dict, history: list[str]) -> tuple[str | None, str]:
+        raise NotImplementedError
+
+    def describe(self) -> str:
+        raise NotImplementedError
+
+
+class PolicyAgent(Agent):
+    """A reference policy from tools/calibrate.py. No model, no spend."""
+
+    uses_model = False
+
+    def __init__(self, name: str):
+        if name not in POLICIES:
+            raise SystemExit(
+                f"Unknown policy '{name}'. Choose from: {', '.join(POLICIES)}"
+            )
+        self.name = name
+        self.policy = POLICIES[name]
+
+    def act(self, obs, history):
+        action = self.policy(obs)
+        return action, f"policy/{self.name}: {action or 'pass'}"
+
+    def describe(self):
+        return f"policy/{self.name} (reference policy, not a language model)"
+
+
+class _PromptedAgent(Agent):
+    """Shared plumbing for the backends that actually prompt a model."""
+
+    def __init__(self, model: str, system_prompt: str, budget: Budget, retries: int):
+        self.model = model
+        self.system_prompt = system_prompt
+        self.budget = budget
+        self.retries = retries
+
+    def act(self, obs, history):
+        user = build_user_prompt(obs, history)
+        return self.complete(user)
+
+    def complete(self, user: str) -> tuple[str | None, str]:
+        last = None
+        for attempt in range(self.retries + 1):
+            self.budget.guard()
+            try:
+                return parse_reply(self._call(user))
+            except TransientAgentError as exc:
+                last = exc
+                if attempt < self.retries:
+                    time.sleep(min(2 ** attempt, 8))
+        raise FatalAgentError(f"gave up after {self.retries + 1} attempts: {last}")
+
+    def _call(self, user: str) -> str:
+        raise NotImplementedError
+
+
+class OllamaAgent(_PromptedAgent):
+    """Local Ollama. What `mesocosm run local` used, and free."""
+
+    def __init__(self, model, system_prompt, budget, retries, host, temperature, max_tokens):
+        super().__init__(model, system_prompt, budget, retries)
+        self.host = host.rstrip("/")
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+
+    def _call(self, user):
+        payload = {
+            "model": self.model,
+            "stream": False,
+            "messages": [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": user},
+            ],
+            "options": {
+                "temperature": self.temperature,
+                "num_predict": self.max_tokens,
+            },
+        }
+        body, status = _post_json(f"{self.host}/api/chat", payload, timeout=300)
+        if status == 404:
+            raise FatalAgentError(
+                f"Ollama has no model '{self.model}'. Pull it: ollama pull {self.model}"
+            )
+        if status >= 400:
+            raise TransientAgentError(f"ollama {status}: {body[:200]}")
+        data = json.loads(body)
+        self.budget.record(
+            tokens_in=data.get("prompt_eval_count", 0),
+            tokens_out=data.get("eval_count", 0),
+        )
+        return data.get("message", {}).get("content", "")
+
+    def describe(self):
+        return f"ollama/{self.model} at {self.host}"
+
+
+class AnthropicAgent(_PromptedAgent):
+    """
+    Claude via the official SDK.
+
+    The system prompt is identical on every one of the ~600 calls in an
+    episode, so it carries a cache breakpoint: cached reads bill at about a
+    tenth of input rate, which is most of the prompt cost in a run this shaped.
+    """
+
+    def __init__(self, model, system_prompt, budget, retries, effort, thinking, max_tokens):
+        super().__init__(model, system_prompt, budget, retries)
+        try:
+            import anthropic
+        except ImportError:
+            raise SystemExit(
+                "The anthropic backend needs the SDK:\n"
+                "    .venv/Scripts/python.exe -m pip install anthropic"
+            )
+        self._sdk = anthropic
+        # One SDK-level retry; `complete` handles the rest so retries count
+        # against the call budget rather than hiding underneath it.
+        self.client = anthropic.Anthropic(max_retries=1)
+        self.effort = effort
+        self.thinking = thinking
+        self.max_tokens = max_tokens
+
+    def _call(self, user):
+        sdk = self._sdk
+        kwargs = {
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "system": [{
+                "type": "text",
+                "text": self.system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }],
+            "messages": [{"role": "user", "content": user}],
+        }
+        if self.thinking == "adaptive":
+            kwargs["thinking"] = {"type": "adaptive", "display": "summarized"}
+        else:
+            kwargs["thinking"] = {"type": "disabled"}
+        if self.effort != "none":
+            kwargs["output_config"] = {"effort": self.effort}
+
+        try:
+            resp = self.client.messages.create(**kwargs)
+        except (sdk.AuthenticationError, sdk.PermissionDeniedError) as exc:
+            raise FatalAgentError(f"auth rejected: {exc}")
+        except sdk.NotFoundError as exc:
+            raise FatalAgentError(f"no such model '{self.model}': {exc}")
+        except sdk.BadRequestError as exc:
+            # Usually an unsupported parameter for this model -- effort and
+            # thinking are model-gated. Retrying spends money on the same 400.
+            raise FatalAgentError(
+                f"request rejected: {exc}\n"
+                f"  If the model predates the Opus 5 family, try "
+                f"--effort none --thinking off."
+            )
+        except sdk.RateLimitError as exc:
+            raise TransientAgentError(f"rate limited: {exc}")
+        except sdk.APIConnectionError as exc:
+            raise TransientAgentError(f"connection failed: {exc}")
+        except sdk.APIStatusError as exc:
+            if exc.status_code >= 500:
+                raise TransientAgentError(f"server error {exc.status_code}: {exc}")
+            raise FatalAgentError(f"API error {exc.status_code}: {exc}")
+
+        usage = resp.usage
+        self.budget.record(
+            tokens_in=usage.input_tokens + (usage.cache_creation_input_tokens or 0),
+            tokens_out=usage.output_tokens,
+            cached=usage.cache_read_input_tokens or 0,
+        )
+        if resp.stop_reason == "refusal":
+            return "ACTION: null"
+        return "".join(b.text for b in resp.content if b.type == "text")
+
+    def describe(self):
+        return f"anthropic/{self.model} (effort={self.effort}, thinking={self.thinking})"
+
+
+class OpenAICompatAgent(_PromptedAgent):
+    """
+    Any /v1/chat/completions endpoint: OpenAI, OpenRouter, vLLM, LM Studio, and
+    Gemini through Google's OpenAI-compatibility layer at
+    https://generativelanguage.googleapis.com/v1beta/openai
+    """
+
+    def __init__(self, model, system_prompt, budget, retries, base_url, api_key,
+                 temperature, max_tokens):
+        super().__init__(model, system_prompt, budget, retries)
+        self.base_url = base_url.rstrip("/")
+        self.api_key = api_key
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+
+    def _call(self, user):
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": user},
+            ],
+            "max_tokens": self.max_tokens,
+            "temperature": self.temperature,
+        }
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        body, status = _post_json(
+            f"{self.base_url}/chat/completions", payload, timeout=300, headers=headers
+        )
+        if status in (400, 401, 403, 404):
+            raise FatalAgentError(f"{status} from {self.base_url}: {body[:300]}")
+        if status == 429:
+            raise TransientAgentError(f"rate limited: {body[:200]}")
+        if status >= 400:
+            raise TransientAgentError(f"{status}: {body[:200]}")
+
+        data = json.loads(body)
+        usage = data.get("usage") or {}
+        self.budget.record(
+            tokens_in=usage.get("prompt_tokens", 0),
+            tokens_out=usage.get("completion_tokens", 0),
+        )
+        choices = data.get("choices") or []
+        if not choices:
+            raise TransientAgentError(f"no choices in response: {body[:200]}")
+        return choices[0].get("message", {}).get("content") or ""
+
+    def describe(self):
+        return f"openai-compatible {self.model} at {self.base_url}"
+
+
+# ── HTTP ──────────────────────────────────────────────────────────────────────
+
+def _post_json(url: str, payload: dict, timeout: float, headers: dict | None = None):
+    """POST JSON, returning (body_text, status). Never raises on HTTP status."""
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(url, data=data, method="POST")
+    req.add_header("Content-Type", "application/json")
+    for key, value in (headers or {}).items():
+        req.add_header(key, value)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8", "replace"), resp.status
+    except urllib.error.HTTPError as exc:
+        return exc.read().decode("utf-8", "replace"), exc.code
+    except urllib.error.URLError as exc:
+        raise TransientAgentError(f"cannot reach {url}: {exc.reason}")
+
+
+class EnvClient:
+    """The adapter, over HTTP. Same surface a hosted run talks to."""
+
+    def __init__(self, url: str, timeout: float = 60.0):
+        self.url = url.rstrip("/")
+        self.timeout = timeout
+
+    def health(self) -> bool:
+        try:
+            with urllib.request.urlopen(f"{self.url}/health", timeout=5) as resp:
+                return resp.status == 200
+        except (urllib.error.URLError, OSError):
+            return False
+
+    def reset(self, seed):
+        return self._post("/reset", {"seed": seed})["observation"]
+
+    def step(self, action):
+        out = self._post("/step", {"action": action})
+        return out["observation"], out["reward"], out["done"], out["info"]
+
+    def close(self):
+        try:
+            self._post("/close", {})
+        except Exception:
+            pass
+
+    def _post(self, path, payload):
+        body, status = _post_json(f"{self.url}{path}", payload, self.timeout)
+        data = json.loads(body)
+        if status >= 400 or "error" in data:
+            raise SystemExit(f"adapter {path} failed: {data.get('error', body[:200])}")
+        return data
+
+
+# ── Episode loop ──────────────────────────────────────────────────────────────
+
+_OBS_KEYS = (
+    "day", "dna", "dna_earned", "cure_progress", "infected_pct", "dead_pct",
+    "victory_progress", "countries_infected",
+)
+_AFTER_KEYS = _OBS_KEYS + ("evolved_traits",)
+
+
+def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dict:
+    obs = env.reset(seed)
+    turns, history, done, step = [], [], False, 0
+    truncated, terminal = None, None
+
+    while not done and step < args.max_steps:
+        step += 1
+        before = obs
+
+        if args.skip_idle and not before["available_traits"] and agent.uses_model:
+            # The only moves left are null or a devolve-for-refund. Spending a
+            # model call to hear "null" is the bulk of an episode's cost.
+            action, reasoning = None, "auto-pass: nothing affordable"
+            budget.skipped += 1
+        else:
+            try:
+                action, reasoning = agent.act(before, history)
+            except BudgetExceeded:
+                truncated = "budget"
+                break
+            except FatalAgentError as exc:
+                print(f"\n  agent failed: {exc}", file=sys.stderr)
+                truncated = "agent-error"
+                break
+
+        obs, reward, done, info = env.step(action)
+        if done:
+            # env.step merges final_score() into info on the terminating step.
+            # Grab it before the per-turn filter below drops everything the
+            # replay does not read.
+            terminal = info.get("score")
+
+        accepted = info.get("action_accepted")
+        if info.get("action_error") and args.verbose:
+            print(f"    day {info['day']}: rejected {action!r} — {info['action_error']}")
+        history.append(
+            f"day {info['day']}: {action or 'pass'}"
+            f"{'' if accepted is not False else ' (rejected)'}"
+            f" | infected {obs['infected_pct']}% dead {obs['dead_pct']}%"
+            f" cure {obs['cure_progress'] * 100:.0f}% dna {obs['dna']}"
+        )
+        history[:] = history[-args.history:] if args.history else []
+
+        turns.append({
+            "step": step,
+            "observation": {k: before[k] for k in _OBS_KEYS},
+            "board_before": {k: before[k] for k in _OBS_KEYS},
+            "board_after": {k: obs[k] for k in _AFTER_KEYS},
+            "reasoning": reasoning,
+            "action": action,
+            "reward": reward,
+            "terminated": done,
+            "info": {
+                "day": info["day"],
+                "dna": info["dna"],
+                "cure_progress": info["cure_progress"],
+                "outcome": info["outcome"],
+                "action_accepted": accepted,
+                "world": info["world"],
+            },
+        })
+
+        if args.verbose and info["day"] % 30 == 0:
+            print(
+                f"    day {info['day']:>3} | infected {obs['infected_pct']:>6.2f}% "
+                f"| dead {obs['dead_pct']:>5.2f}% | cure {obs['cure_progress'] * 100:>5.1f}% "
+                f"| dna {obs['dna']:>3} | {budget.calls} calls"
+            )
+
+    score = terminal or (_incomplete_score(turns) if turns else {})
+    if turns:
+        turns[-1]["episode_end"] = {
+            "total_reward": round(sum(t["reward"] for t in turns), 4),
+            "steps": step,
+            "status": "completed" if done else (truncated or "max_steps"),
+            "terminal_info": score,
+        }
+    return {
+        "seed": seed,
+        "steps": step,
+        "done": done,
+        "truncated": truncated,
+        "score": score,
+        "turns": turns,
+    }
+
+
+def _incomplete_score(turns: list[dict]) -> dict:
+    """
+    Stand-in terminal for an episode cut short by a budget or an agent error,
+    so a stopped run reports the board it reached rather than nothing at all.
+    Marked `incomplete` -- these are not comparable to a finished episode, and
+    `aggregate` counts them only for the fields they actually carry.
+    """
+    board = turns[-1]["board_after"]
+    return {
+        "outcome": None,
+        "day": board["day"],
+        "victory_progress": board["victory_progress"],
+        "dead_pct": board["dead_pct"],
+        "affected_pct": round(board["infected_pct"] + board["dead_pct"], 2),
+        "incomplete": True,
+    }
+
+
+# ── Scoring ───────────────────────────────────────────────────────────────────
+
+def aggregate(manifest: dict, episodes: list[dict]) -> list[tuple[str, str]]:
+    """Mean of each terminal_field metric named in the manifest."""
+    rows = []
+    for metric in manifest["scoring"]["metrics"]:
+        if metric.get("type") != "terminal_field":
+            continue
+        field = metric["field"]
+        values = [
+            ep["score"][field] for ep in episodes
+            if ep["score"] and isinstance(ep["score"].get(field), (int, float))
+        ]
+        if not values:
+            rows.append((metric["name"], "n/a"))
+            continue
+        mean = sum(values) / len(values)
+        note = "" if len(values) == len(episodes) else f"  (n={len(values)})"
+        rows.append((metric["name"], f"{mean:.4f}{note}"))
+    return rows
+
+
+# ── Wiring ────────────────────────────────────────────────────────────────────
+
+def build_agent(args, system_prompt: str, budget: Budget) -> Agent:
+    backend, _, model = args.model.partition("/")
+    if not model and backend not in POLICIES:
+        raise SystemExit(
+            "--model must be <backend>/<model>, e.g. ollama/llama3.2, "
+            "policy/expert, anthropic/claude-opus-5, openai/gpt-5"
+        )
+
+    if backend == "policy":
+        return PolicyAgent(model)
+    if backend == "ollama":
+        return OllamaAgent(
+            model, system_prompt, budget, args.retries,
+            args.ollama_host, args.temperature, args.max_tokens,
+        )
+    if backend == "anthropic":
+        return AnthropicAgent(
+            model, system_prompt, budget, args.retries,
+            args.effort, args.thinking, args.max_tokens,
+        )
+    if backend == "openai":
+        key = os.environ.get(args.api_key_env, "")
+        if not key:
+            raise SystemExit(
+                f"${args.api_key_env} is not set. Set it, or point --api-key-env "
+                f"at the variable holding the key for {args.base_url}."
+            )
+        return OpenAICompatAgent(
+            model, system_prompt, budget, args.retries,
+            args.base_url, key, args.temperature, args.max_tokens,
+        )
+    raise SystemExit(f"Unknown backend '{backend}'. Use policy, ollama, anthropic or openai.")
+
+
+def resolve_prices(args) -> tuple[float, float]:
+    if args.price_in is not None or args.price_out is not None:
+        return args.price_in or 0.0, args.price_out or 0.0
+    backend, _, model = args.model.partition("/")
+    if backend == "anthropic":
+        for known, prices in ANTHROPIC_PRICES.items():
+            if model == known or model.startswith(known):
+                return prices
+    return 0.0, 0.0
+
+
+def parse_seeds(raw: str | None, episodes: int) -> list:
+    if not raw:
+        return DEFAULT_SEEDS[:episodes] if episodes <= len(DEFAULT_SEEDS) else (
+            DEFAULT_SEEDS * (episodes // len(DEFAULT_SEEDS) + 1)
+        )[:episodes]
+    seeds = []
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        seeds.append(int(token) if token.lstrip("-").isdigit() else token)
+    return seeds
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("--model", default="ollama/llama3.2",
+                        help="<backend>/<model>: ollama/…, anthropic/…, openai/…, policy/…")
+    parser.add_argument("--episodes", type=int, default=5,
+                        help="Episode count. Ignored when --seeds names them explicitly.")
+    parser.add_argument("--seeds", help="Comma-separated country names or integers")
+    parser.add_argument("--max-steps", type=int, default=600, help="Day cap per episode")
+    parser.add_argument("--env-url", default="http://localhost:8765")
+    parser.add_argument("--manifest", default=str(ROOT / "benchanything.json"))
+    parser.add_argument("--system-prompt", help="Extra instruction appended for the agent")
+    parser.add_argument("--history", type=int, default=8,
+                        help="Recent turns shown to the model (0 for none)")
+
+    parser.add_argument("--skip-idle", action="store_true",
+                        help="Auto-pass days with no affordable trait, without a model call")
+    parser.add_argument("--max-calls", type=int,
+                        help="Hard ceiling on model calls (default: episodes x max-steps)")
+    parser.add_argument("--max-cost", type=float,
+                        help="Hard ceiling on estimated USD (default 5.00 for paid backends, 0 disables)")
+    parser.add_argument("--price-in", type=float, help="USD per 1M input tokens, for cost estimates")
+    parser.add_argument("--price-out", type=float, help="USD per 1M output tokens")
+    parser.add_argument("--probe", action="store_true",
+                        help="One model call on a fresh board, printed in full, then exit")
+    parser.add_argument("--retries", type=int, default=2, help="Retries per transient failure")
+
+    parser.add_argument("--temperature", type=float, default=0.3,
+                        help="ollama and openai backends (Claude models reject it)")
+    parser.add_argument("--max-tokens", type=int, default=1024, help="Response cap per call")
+    parser.add_argument("--effort", default="medium",
+                        choices=["none", "low", "medium", "high", "xhigh", "max"],
+                        help="anthropic backend: output_config.effort ('none' omits it)")
+    parser.add_argument("--thinking", default="adaptive", choices=["adaptive", "off"],
+                        help="anthropic backend: adaptive thinking")
+    parser.add_argument("--ollama-host", default=os.environ.get("OLLAMA_HOST", "http://localhost:11434"))
+    parser.add_argument("--base-url", default="https://api.openai.com/v1",
+                        help="openai backend endpoint, e.g. "
+                             "https://generativelanguage.googleapis.com/v1beta/openai for Gemini")
+    parser.add_argument("--api-key-env", default="OPENAI_API_KEY",
+                        help="Env var holding the key for --base-url (e.g. GEMINI_API_KEY)")
+
+    parser.add_argument("--export", help="Write the run to PATH in the run-export shape")
+    parser.add_argument("--quiet", dest="verbose", action="store_false",
+                        help="Suppress the per-30-day progress lines")
+    args = parser.parse_args()
+
+    manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    system_prompt = build_system_prompt(manifest, args.system_prompt)
+
+    seeds = parse_seeds(args.seeds, args.episodes)
+    price_in, price_out = resolve_prices(args)
+    backend = args.model.partition("/")[0]
+    paid = backend in _PAID_BACKENDS
+    max_cost = args.max_cost if args.max_cost is not None else (5.00 if paid else 0.0)
+    budget = Budget(
+        max_calls=args.max_calls if args.max_calls is not None else len(seeds) * args.max_steps,
+        max_cost=max_cost,
+        price_in=price_in,
+        price_out=price_out,
+    )
+    agent = build_agent(args, system_prompt, budget)
+
+    env = EnvClient(args.env_url)
+    if not env.health():
+        raise SystemExit(
+            f"No adapter at {args.env_url}. Start it first:\n"
+            f"    python adapter.py"
+        )
+
+    print(f"agent      : {agent.describe()}")
+    if agent.uses_model:
+        caps = [f"{budget.max_calls} calls"]
+        if max_cost and budget.priced:
+            caps.append(f"${max_cost:.2f}")
+        elif paid and not budget.priced:
+            caps.append("cost unknown — pass --price-in/--price-out to enforce a $ cap")
+        print(f"guards     : {', '.join(caps)}"
+              f"{' | skip-idle on' if args.skip_idle else ''}")
+    print(f"episodes   : {len(seeds)} — seeds {seeds}")
+    print(f"env        : {args.env_url}")
+    print()
+
+    if args.probe:
+        if not agent.uses_model:
+            raise SystemExit("--probe needs a model backend; policy/* makes no calls.")
+        obs = env.reset(seeds[0])
+        user = build_user_prompt(obs, [])
+        print("─" * 70)
+        print(system_prompt)
+        print("─" * 70)
+        print(user)
+        print("─" * 70)
+        action, reasoning = agent.act(obs, [])
+        print(f"action    : {action!r}")
+        print(f"reasoning : {reasoning}")
+        print(f"usage     : {budget.summary()}")
+        env.close()
+        return 0
+
+    episodes, stopped = [], None
+    started = time.time()
+    for index, seed in enumerate(seeds, 1):
+        print(f"[{index}/{len(seeds)}] seed {seed!r}")
+        record = run_episode(env, agent, seed, budget, args)
+        episodes.append(record)
+        score = record["score"] or {}
+        print(
+            f"    → {score.get('outcome') or record['truncated'] or 'incomplete'} "
+            f"on day {score.get('day', '?')} | victory {score.get('victory_progress', 0):.4f} "
+            f"| dead {score.get('dead_pct', 0)}% | {budget.summary()}"
+        )
+        if record["truncated"]:
+            stopped = record["truncated"]
+            break
+
+    print()
+    print("=== Run summary ===")
+    print(f"agent    : {agent.describe()}")
+    print(f"episodes : {len(episodes)} in {time.time() - started:.0f}s")
+    if agent.uses_model:
+        print(f"usage    : {budget.summary()}")
+    if stopped:
+        print(f"stopped  : {stopped} — metrics below cover the episodes that finished")
+    print()
+    rows = aggregate(manifest, episodes)
+    width = max(len(name) for name, _ in rows)
+    primary = manifest["scoring"]["primary_metric"]
+    for name, value in rows:
+        mark = " <- primary" if name == primary else ""
+        print(f"  {name:<{width}}  {value}{mark}")
+
+    outcomes = {}
+    for ep in episodes:
+        key = (ep["score"] or {}).get("outcome") or "incomplete"
+        outcomes[key] = outcomes.get(key, 0) + 1
+    print()
+    print("  outcomes: " + ", ".join(f"{k} x{v}" for k, v in sorted(outcomes.items())))
+
+    if args.export:
+        path = Path(args.export)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # The showcase reads `run.config.model` for the label and matches
+        # `episodes[].id` against the `replay` keys for the seed and terminal
+        # block, exactly as a platform export lays them out. Top-level `seed`
+        # takes precedence over the per-episode one in the UI, so it is only
+        # set when there is a single episode to describe.
+        keyed = [(f"ep{i}-{ep['seed']}", ep) for i, ep in enumerate(episodes, 1)]
+        doc = {
+            "schema_version": "1",
+            "domain_id": manifest["id"],
+            "domain_name": manifest["name"],
+            "binding_vow_version": manifest["binding_vow"]["version"],
+            "visibility": "local",
+            "generated_by": f"tools/bench_local.py — {agent.describe()}",
+            "run": {"config": {"model": args.model}},
+            "episodes": [
+                {"id": key, "seed": ep["seed"], "terminal_info": ep["score"]}
+                for key, ep in keyed
+            ],
+            "replay": {key: ep["turns"] for key, ep in keyed},
+        }
+        if len(keyed) == 1:
+            doc["seed"] = keyed[0][1]["seed"]
+        path.write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
+        print(f"\n  exported {path} ({path.stat().st_size / 1024:.0f} KB)")
+
+    env.close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

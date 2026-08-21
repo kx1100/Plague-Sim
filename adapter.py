@@ -15,6 +15,7 @@ Endpoints:
 
 import argparse
 import json
+import socket
 import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -190,6 +191,38 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+# ── Server ─────────────────────────────────────────────────────────────────────
+
+class DualStackServer(HTTPServer):
+    """
+    Accept IPv6 and IPv4 on one socket.
+
+    An IPv4-only server is why `localhost:8765` cost ~2 seconds per request on
+    Windows: `localhost` resolves to ::1 first, that connection has to fail
+    before the client retries 127.0.0.1, and a 600-step episode pays for it 600
+    times -- which reads as a hung benchmark, not a slow one. Every documented
+    client uses the name rather than the address (`curl localhost:8765`,
+    `mesocosm doctor --local`), so the fix belongs here. `http.server` does the
+    same thing for the same reason.
+    """
+
+    address_family = socket.AF_INET6
+
+    # On Windows SO_REUSEADDR does not mean "rebind a port still in TIME_WAIT",
+    # it means "bind on top of a live listener": two adapters could then hold
+    # 8765 at once, each with its own PlagueEnv, with requests landing on
+    # whichever the OS picked. Fail loudly there instead. On POSIX the flag
+    # keeps its usual meaning and is what allows a prompt restart.
+    allow_reuse_address = sys.platform != "win32"
+
+    def server_bind(self):
+        try:
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        except (AttributeError, OSError):
+            pass   # v6-only stack; IPv4 clients use 127.0.0.1 explicitly
+        return super().server_bind()
+
+
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -200,8 +233,13 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8765, help="Port to listen on")
     args = parser.parse_args()
 
-    server = HTTPServer(("0.0.0.0", args.port), Handler)
-    print(f"Plague adapter listening on http://0.0.0.0:{args.port}", file=sys.stderr)
+    try:
+        server = DualStackServer(("::", args.port), Handler)
+    except OSError:
+        # No usable IPv6 stack on this host. Clients that resolve `localhost`
+        # to ::1 pay the fallback delay again, but the server still works.
+        server = HTTPServer(("0.0.0.0", args.port), Handler)
+    print(f"Plague adapter listening on http://localhost:{args.port}", file=sys.stderr)
     print("Routes: GET /health /render  |  POST /reset /step /close", file=sys.stderr)
     try:
         server.serve_forever()
