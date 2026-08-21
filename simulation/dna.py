@@ -5,9 +5,12 @@ DNA is the only currency in the game, so its scarcity *is* the difficulty. Every
 source here must be bounded over a full episode, or the agent ends up able to
 afford the entire 697-DNA trait tree and stops making choices.
 
-Budget: roughly 150-300 DNA across a 600-day episode, against a tree that costs
-697 to evolve fully. The agent should afford about a third of it, and should have
-to earn the back half by actually spreading rather than by waiting.
+Budget: bounded at 450 DNA for any policy across a 600-day episode, against a
+tree that costs 697 to evolve fully, with at least 150 available to skilled play.
+Income is play-dependent by design -- spreading is what pays -- so the invariant
+is a ceiling plus a floor, not one flat band. Measured max is 340 (see
+`tools/calibrate.py`); the agent affords roughly a third to a half of the tree,
+and has to earn the back half by spreading rather than by waiting.
 
 Every source is a *ratchet on cumulative progress*, never a rate on the current
 population. A per-tick award scales with the infected headcount and runs away
