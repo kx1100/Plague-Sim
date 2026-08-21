@@ -2,7 +2,8 @@
 adapter.py — HTTP server wrapper around PlagueEnv.
 
 Usage:
-    python adapter.py --port 8080
+    python adapter.py            # -> http://localhost:8765
+    python adapter.py --port N   # only if something else holds 8765
 
 Endpoints:
     GET  /health    — liveness check
@@ -193,7 +194,10 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Plague simulation HTTP adapter")
-    parser.add_argument("--port", type=int, default=8080, help="Port to listen on")
+    # 8765 is what `mesocosm doctor --local` and `mesocosm run local` probe by
+    # default, and what LOCAL_DEV.md documents. The old 8080 default meant the
+    # documented commands could not find a server started the documented way.
+    parser.add_argument("--port", type=int, default=8765, help="Port to listen on")
     args = parser.parse_args()
 
     server = HTTPServer(("0.0.0.0", args.port), Handler)
