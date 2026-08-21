@@ -1,5 +1,8 @@
 """Tests for simulation mechanics, the env lifecycle, and the HTTP adapter."""
 
+import json
+from pathlib import Path
+
 import pytest
 
 from adapter import Handler
@@ -291,10 +294,70 @@ def test_observation_shape():
     env = PlagueEnv()
     obs = env.reset("India")
     expected = {
-        "day", "dna", "cure_progress", "infected_pct", "dead_pct",
-        "countries_infected", "evolved_traits", "available_traits",
+        "day", "dna", "dna_earned", "cure_progress", "infected_pct", "dead_pct",
+        "victory_progress", "countries_infected", "evolved_traits",
+        "devolve_options", "available_traits", "action_hint",
     }
     assert expected <= set(obs)
+
+
+def test_observation_matches_the_published_spec():
+    """
+    Drift guard: benchanything.json is the contract agents are written against,
+    so the observation and the spec's field list must name exactly the same
+    keys. Adding a key to one without the other is the bug this catches.
+    """
+    spec = json.loads(
+        (Path(__file__).resolve().parents[1] / "benchanything.json").read_text()
+    )
+    documented = set(spec["binding_vow"]["observation_space"]["fields"])
+    env = PlagueEnv()
+    obs = env.reset("India")
+    assert set(obs) == documented
+
+
+def test_devolve_options_excludes_one_time_traits():
+    """
+    Reshuffles are locked in once bought (commit 4), so offering them as devolve
+    targets would advertise an action the simulation always rejects.
+    """
+    env = PlagueEnv()
+    env.reset("India")
+    game = env.game
+    game.dna = 999
+    for tid in ("Air1", "GeneticHardening1", "GeneticReShuffle1"):
+        assert evolve_trait(game, tid) is True
+
+    obs = env.observation()
+    assert "GeneticReShuffle1" in obs["evolved_traits"]
+    assert "GeneticReShuffle1" not in obs["devolve_options"]
+    assert "Air1" in obs["devolve_options"]
+
+    # Everything offered must actually be accepted.
+    for tid in obs["devolve_options"]:
+        assert devolve_trait(game, tid) > 0, tid
+
+
+def test_action_hint_does_not_claim_a_free_trait_when_fully_evolved():
+    """
+    Regression: `min(..., default=0)` reported "cheapest unevolved trait costs 0"
+    once every trait was owned, telling the agent to keep shopping.
+    """
+    env = PlagueEnv()
+    env.reset("India")
+    game = env.game
+    game.disease.evolved.update(TRAITS)
+    game.dna = 0
+    hint = env.observation()["action_hint"]
+    assert "costs 0" not in hint
+    assert "Every trait" in hint
+
+
+def test_action_hint_lists_affordable_traits():
+    env = PlagueEnv()
+    obs = env.reset("India")
+    assert "Air1" in obs["action_hint"]
+    assert obs["action_hint"].endswith("Output exactly one of these trait IDs.")
 
 
 def test_step_returns_contract():
@@ -327,8 +390,96 @@ def test_final_score_reports_terminal_fields():
     assert expected <= set(score)
 
 
+def test_episode_ends_with_timeout_at_max_steps():
+    """
+    An episode that survives the day cap used to finish with `outcome: None`,
+    which benchanything.json defines as "still running". Weak policies now
+    routinely reach the cap, so the ending has a name.
+    """
+    env = PlagueEnv(max_steps=5)
+    env.reset("India")
+    for _ in range(4):
+        _, _, done, info = env.step(None)
+        assert done is False
+        assert info["outcome"] is None
+
+    _, _, done, info = env.step(None)
+    assert done is True
+    assert info["outcome"] == "timeout"
+    assert env.game.day == 5
+
+
+def test_timeout_still_reports_terminal_fields():
+    env = PlagueEnv(max_steps=3)
+    env.reset("India")
+    for _ in range(3):
+        _, _, done, info = env.step(None)
+    assert done is True
+    assert info["score"]["outcome"] == "timeout"
+    assert info["score"]["victory_progress"] >= 0.0
+    assert info["plague_score"] >= 0.0
+
+
+def test_timeout_does_not_override_a_real_outcome():
+    """max_steps=1 makes both endings land on the same step; `cured` must win."""
+    env = PlagueEnv(max_steps=1)
+    env.reset("India")
+    env.game.cure_progress = 1.0
+    _, _, done, info = env.step(None)
+    assert done is True
+    assert info["outcome"] == "cured"
+
+
 def test_render_before_reset_is_safe():
     assert "not initialized" in PlagueEnv().render().lower()
+
+
+# ── Adapter action validation ─────────────────────────────────────────────────
+
+def test_adapter_accepts_a_legal_devolve(game):
+    """
+    Regression: every 'devolve:<id>' fell through to the evolve checks, where
+    the prefix made it fail as "not a valid trait ID". The action the spec
+    documents was unreachable through the adapter -- the only path a hosted
+    agent has.
+    """
+    game.dna = 999
+    evolve_trait(game, "Air1")
+    action, error = Handler._validate_action("devolve:Air1", game)
+    assert error is None
+    assert action == "devolve:Air1"
+
+
+def test_adapter_rejects_devolving_a_one_time_trait(game):
+    game.dna = 999
+    evolve_trait(game, "GeneticHardening1")
+    evolve_trait(game, "GeneticReShuffle1")
+    action, error = Handler._validate_action("devolve:GeneticReShuffle1", game)
+    assert action is None
+    assert "one-time-use" in error
+
+
+def test_adapter_rejects_devolving_an_unevolved_trait(game):
+    action, error = Handler._validate_action("devolve:Air1", game)
+    assert action is None
+    assert "not evolved" in error
+
+
+def test_adapter_rejects_devolving_an_unknown_trait(game):
+    action, error = Handler._validate_action("devolve:Nonsense", game)
+    assert action is None
+    assert "not a valid trait ID" in error
+
+
+def test_adapter_passes_null_through(game):
+    assert Handler._validate_action(None, game) == (None, None)
+
+
+def test_adapter_rejects_an_unaffordable_trait(game):
+    game.dna = 0
+    action, error = Handler._validate_action("Air1", game)
+    assert action is None
+    assert "not available" in error
 
 
 # ── Adapter fuzzy trait matching ──────────────────────────────────────────────

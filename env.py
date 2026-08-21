@@ -8,12 +8,15 @@ Observation  : aggregate statistics + available actions exposed to the agent.
 import random as _random
 
 from models.game_state import GameState
-from simulation.actions import evolve_trait, devolve_trait
+from simulation.actions import evolve_trait, devolve_trait, devolvable_traits
 from data.traits import get_affordable_traits, TRAITS
 
 # Fraction of humanity that must die for the `extinct` outcome. Mirrors the
 # threshold in GameState._check_game_over.
 _EXTINCTION_THRESHOLD = 0.95
+
+# Episode length cap. Matches `episode.max_steps` in benchanything.json.
+_DEFAULT_MAX_STEPS = 600
 
 
 class PlagueEnv:
@@ -24,10 +27,11 @@ class PlagueEnv:
     step(action) → (observation, reward, done, info)
     """
 
-    def __init__(self):
+    def __init__(self, max_steps: int = _DEFAULT_MAX_STEPS):
         self.game: GameState | None = None
         self._seed_country: str | None = None
         self._milestones: dict = {}   # tracks days_to_X benchmarks
+        self.max_steps = max_steps
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -80,6 +84,7 @@ class PlagueEnv:
 
         self.game.step()
         self._record_milestones()
+        self._check_timeout()
 
         obs = self.observation()
         reward = self._reward()
@@ -109,12 +114,16 @@ class PlagueEnv:
             "dead_pct": round(g.percentage_dead() * 100, 2),
             "countries_infected": g.infected_countries(),
             "evolved_traits": sorted(g.disease.evolved),
+            "devolve_options": devolvable_traits(g.disease.evolved),
+            "dna_earned": g.dna_earned,
+            "victory_progress": self._victory_progress(),
             "available_traits": {
                 tid: {"name": t["name"], "cost": t["cost"], "tree": t["tree"]}
                 for tid, t in get_affordable_traits(
                     g.disease.evolved, g.dna
                 ).items()
             },
+            "action_hint": self._action_hint(g),
         }
 
     # ── Render (human-readable snapshot) ──────────────────────────────────────
@@ -241,15 +250,37 @@ class PlagueEnv:
                 f"Traits you can evolve right now: {', '.join(ids)}. "
                 f"Output exactly one of these trait IDs."
             )
+        # `default=None`, not 0: a fully-evolved disease has no cheapest trait,
+        # and reporting a cost of 0 told the agent to keep trying to buy one.
         cheapest_cost = min(
             (t["cost"] for tid, t in TRAITS.items() if tid not in g.disease.evolved),
-            default=0,
+            default=None,
         )
+        if cheapest_cost is None:
+            return (
+                f"DNA={g.dna}. Every trait in the tree is evolved. "
+                f"Nothing left to buy. Output: null"
+            )
         return (
             f"DNA={g.dna}.{already} "
             f"Cheapest unevolved trait costs {cheapest_cost}. "
             f"Cannot evolve anything yet. Output: null"
         )
+
+    def _check_timeout(self) -> None:
+        """
+        End the episode when it runs out of days.
+
+        The day cap used to live only in the caller's loop, so an episode that
+        survived all 600 days finished with `outcome: None` -- indistinguishable
+        from one still running, which benchanything.json documents as the
+        meaning of null. With the slower cure this is the common ending for weak
+        policies, so the env owns the cap and names the outcome.
+        """
+        g = self.game
+        if not g.game_over and g.day >= self.max_steps:
+            g.game_over = True
+            g.outcome = "timeout"
 
     def _record_milestones(self) -> None:
         g = self.game

@@ -19,6 +19,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from data.traits import TRAITS, get_affordable_traits
 from env import PlagueEnv
+from simulation.actions import devolvable_traits
 
 _env = PlagueEnv()
 
@@ -57,31 +58,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"error": "Call /reset first."}, status=400)
                 return
             action = body.get("action", None)
-            action_error = None
-            if action is not None:
-                evolved = _env.game.disease.evolved
-                affordable = get_affordable_traits(evolved, _env.game.dna)
-                # Normalise natural-language output from weak models.
-                # Matching against affordable only means already-evolved tiers
-                # are skipped and the next available tier is returned instead.
-                normalised = self._fuzzy_trait(action, affordable)
-                if normalised and normalised != action:
-                    action = normalised
-                if action in evolved:
-                    action_error = f"'{action}' is already evolved."
-                    action = None
-                elif action not in TRAITS:
-                    action_error = f"'{action}' is not a valid trait ID."
-                    action = None
-                elif action not in affordable:
-                    action_error = f"'{action}' is not available (prereqs unmet or insufficient DNA)."
-                    action = None
+            action, action_error = self._validate_action(action, _env.game)
             obs, reward, done, info = _env.step(action)
             if action_error:
                 info["action_error"] = action_error
                 info["available_traits"] = list(get_affordable_traits(
                     _env.game.disease.evolved, _env.game.dna
                 ).keys())
+                info["devolve_options"] = devolvable_traits(
+                    _env.game.disease.evolved
+                )
             response = {
                 "observation": obs,
                 "reward": round(reward, 6),
@@ -103,6 +89,52 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": f"Unknown route: {self.path}"}, status=404)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _validate_action(action, game) -> tuple[str | None, str | None]:
+        """
+        Turn a raw action string into one the env accepts, or into an error.
+
+        Returns (action, error). A rejected action becomes None so the step
+        still advances a day -- the episode never stalls on a bad output -- and
+        the reason is reported back in info.action_error.
+        """
+        if action is None:
+            return None, None
+
+        evolved = game.disease.evolved
+
+        if action.startswith("devolve:"):
+            # Devolves used to fall through to the evolve checks below, where
+            # the "devolve:" prefix made every one of them fail as "not a valid
+            # trait ID" -- an action the spec documents but the adapter, the
+            # only path a hosted agent has, always refused.
+            trait_id = action[len("devolve:"):].strip()
+            if trait_id not in TRAITS:
+                return None, f"'{trait_id}' is not a valid trait ID."
+            if trait_id not in evolved:
+                return None, f"'{trait_id}' is not evolved, so it cannot be devolved."
+            if trait_id not in devolvable_traits(evolved):
+                return None, (
+                    f"'{trait_id}' is a one-time-use trait and is locked in once "
+                    f"bought. See observation.devolve_options."
+                )
+            return f"devolve:{trait_id}", None
+
+        affordable = get_affordable_traits(evolved, game.dna)
+        # Normalise natural-language output from weak models.
+        # Matching against affordable only means already-evolved tiers
+        # are skipped and the next available tier is returned instead.
+        normalised = Handler._fuzzy_trait(action, affordable)
+        if normalised and normalised != action:
+            action = normalised
+        if action in evolved:
+            return None, f"'{action}' is already evolved."
+        if action not in TRAITS:
+            return None, f"'{action}' is not a valid trait ID."
+        if action not in affordable:
+            return None, f"'{action}' is not available (prereqs unmet or insufficient DNA)."
+        return action, None
 
     @staticmethod
     def _fuzzy_trait(raw: str, affordable: dict) -> str | None:

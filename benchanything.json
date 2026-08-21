@@ -7,16 +7,30 @@
   "binding_vow": {
     "version": "1.0.0",
     "tier": "tier1",
-    "description": "The agent controls a disease spreading across 71 countries. Each step it may evolve one trait (spending DNA points) or pass (null action). The simulation runs for up to 600 days. Maximise (infected + dead) fraction while slowing the cure.",
+    "description": "The agent controls a disease spreading across 71 countries. Each step it may evolve one trait (spending DNA points), devolve one it already owns for a small refund, or pass (null action). The simulation runs for up to 600 days. Maximise (infected + dead) fraction while slowing the cure.",
 
     "observation_space": {
       "type": "json",
-      "description": "{ day, dna, cure_progress, infected_pct, dead_pct, countries_infected, evolved_traits: string[], available_traits: { trait_id: { name, cost, tree } } }"
+      "fields": {
+        "day": "Simulation day, 1-600.",
+        "dna": "DNA available to spend right now.",
+        "dna_earned": "Lifetime DNA granted this episode. Income is a ratchet on cumulative progress (new countries infected, infection and death milestones), not a rate, so it is bounded by the size of the world rather than by episode length.",
+        "cure_progress": "Cure fraction in [0, 1]. At 1.0 the episode ends as 'cured'.",
+        "infected_pct": "Percentage of world population currently infected.",
+        "dead_pct": "Percentage of world population dead.",
+        "victory_progress": "(infected + dead) / population, in [0, 1]. The primary metric; 1.0 is the 'infected_all' win.",
+        "countries_infected": "Number of the 71 countries with at least one infection.",
+        "evolved_traits": "Trait IDs currently evolved.",
+        "devolve_options": "Trait IDs that 'devolve:<trait_id>' will accept. Evolved traits minus the one-time-use ReShuffle traits, which are locked in once bought.",
+        "available_traits": "Trait IDs that can be evolved right now: prereqs met and cost <= dna.",
+        "action_hint": "Plain-language restatement of the legal actions this turn."
+      },
+      "description": "{ day, dna, dna_earned, cure_progress, infected_pct, dead_pct, victory_progress, countries_infected, evolved_traits: string[], devolve_options: string[], available_traits: { trait_id: { name, cost, tree } }, action_hint: string }"
     },
 
     "action_space": {
       "type": "text",
-      "description": "A trait_id string from observation.available_traits (must be a key listed there), or null to skip this turn and accumulate DNA."
+      "description": "A trait_id string from observation.available_traits (must be a key listed there), 'devolve:<trait_id>' for a trait_id in observation.devolve_options, or null to skip this turn and accumulate DNA."
     },
 
     "reward": {
@@ -37,9 +51,23 @@
   },
 
   "scoring": {
-    "primary_metric": "plague_score",
+    "primary_metric": "victory_progress",
     "higher_is_better": true,
     "metrics": [
+      {
+        "name": "victory_progress",
+        "type": "terminal_field",
+        "aggregation": "mean",
+        "field": "victory_progress",
+        "description": "(infected + dead) / population at episode end, in [0, 1]. Primary metric: winning is reachable but rare, so agents are ranked by how close they got rather than by a mostly-constant outcome."
+      },
+      {
+        "name": "extinction_progress",
+        "type": "terminal_field",
+        "aggregation": "mean",
+        "field": "extinction_progress",
+        "description": "dead / (0.95 * population), clamped to [0, 1]. Distance to the premium 'extinct' win."
+      },
       {
         "name": "plague_score",
         "type": "terminal_field",
@@ -84,7 +112,8 @@
   "action_rules": [
     "action must be a key from observation.available_traits, the string 'devolve:<trait_id>', or null.",
     "Evolve: action is a trait_id from observation.available_traits. Ignored if invalid, prereqs unmet, or insufficient DNA.",
-    "Devolve: action is 'devolve:<trait_id>' where trait_id is in observation.evolved_traits. Refunds a flat 2 DNA. Only that single trait is removed — dependent traits are NOT removed. Cure rollbacks from reshuffle traits are NOT reversed.",
+    "Devolve: action is 'devolve:<trait_id>' where trait_id is in observation.devolve_options. Refunds a flat 2 DNA. Only that single trait is removed — dependent traits are NOT removed. Cure rollbacks from reshuffle traits are NOT reversed.",
+    "One-time-use traits cannot be devolved: the three GeneticReShuffle traits roll the cure back once each, and are locked in once bought so the rollback cannot be recycled. They appear in evolved_traits but never in devolve_options; a devolve action naming one is rejected.",
     "null (or omitted) action is a valid strategy — it advances the simulation one day without spending DNA, allowing DNA to accumulate from ongoing infections and deaths.",
     "Each step is exactly one simulation day."
   ],
@@ -97,8 +126,10 @@
       "day": "Day after the step.",
       "dna": "DNA after the step.",
       "cure_progress": "Cure fraction after the step.",
-      "outcome": "null while running; string when done.",
-      "action_accepted": "true if trait was successfully evolved, false/null otherwise.",
+      "outcome": "null while running; one of cured | extinct | infected_all | died_out | timeout when done. An episode that runs the full 600 days ends as 'timeout', so a finished episode never reports null.",
+      "action_accepted": "true if the trait was successfully evolved or devolved, false/null otherwise.",
+      "action_error": "Present only when the action was rejected: why. The step still advances one day, so a bad action costs a turn rather than stalling the episode.",
+      "devolve_options": "Present alongside action_error: the trait IDs a devolve action would currently accept.",
       "score": "Final score object (only present when done=true)."
     }
   },
@@ -113,15 +144,16 @@
 
   "termination": {
     "conditions": {
-      "cured": "cure_progress = 1.0 — disease failed.",
-      "extinct": "95%+ humanity dead — disease wins.",
-      "infected_all": "No healthy people remain — disease wins.",
-      "died_out": "infected = 0 after day 30 — disease died out."
+      "cured": "cure_progress reaches 1.0 — disease failed.",
+      "extinct": "Saturation reached with more than 95% of humanity dead — premium win.",
+      "infected_all": "Saturation reached: healthy population falls to 0.1% or less of the world (~7M of 7.09B). Internal spread decays exponentially, so requiring literally zero healthy humans would make this win unreachable by construction rather than by difficulty.",
+      "died_out": "infected = 0 after day 30 — disease died out.",
+      "timeout": "The episode reached max_steps with no other condition met — humanity survived the window. Terminal fields are populated exactly as for any other ending."
     },
     "max_steps": 600
   },
 
-  "ranking": "Ranked by affected_pct desc, dead_pct desc, days_to_infect_50pct asc.",
+  "ranking": "Ranked by victory_progress desc, then dead_pct desc, then days_to_infect_50pct asc.",
 
   "world": {
     "countries": 71,
