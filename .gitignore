@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Run artifacts
+data/traces/
+showcase/data/
+
+# Working notes
+PLAN.md
