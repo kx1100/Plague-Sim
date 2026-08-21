@@ -7,6 +7,9 @@ class GameState:
         self.day = 0
         self.dna = 0
         self.cure_progress = 0.0
+        self.infection_milestones_awarded = 0  # cumulative infection bubbles paid
+        self.death_milestones_awarded = 0      # cumulative death bubbles paid
+        self.dna_earned = 0                # lifetime DNA granted (excludes starting stock)
         self.game_over = False
         self.outcome = None  # "cured" | "extinct" | "infected_all" | "died_out"
         self.disease = Disease()
