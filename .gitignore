@@ -10,3 +10,4 @@ showcase/data/
 
 # Working notes
 PLAN.md
+.pytest_cache/

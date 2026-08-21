@@ -1,0 +1,9 @@
+# Development-only dependencies (tests, tooling).
+#
+# Keep requirements.txt for packages the ENV ITSELF imports -- the Mesocosm
+# platform installs that file on `env submit`, and it should not pull in a
+# test runner.
+#
+#   .venv/Scripts/python.exe -m pip install -r requirements-dev.txt
+
+pytest>=8.0
