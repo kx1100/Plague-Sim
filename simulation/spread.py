@@ -1,5 +1,15 @@
 import random
 
+# How much a fully aware population suppresses internal spread. Awareness
+# saturates at 1.0 in every country well before the endgame, so this sets the
+# floor on late-game transmission: at 0.8 spread fell to 20% of base and the
+# world could never be saturated.
+#
+# Nothing in the trait tree counters this -- traits answer climate, borders and
+# cure research, but not internal awareness -- so a high value is a ceiling the
+# agent cannot play against, which is the wrong kind of limit for a benchmark.
+_AWARENESS_SPREAD_PENALTY = 0.65
+
 
 def climate_multiplier(climate: str, disease) -> float:
     if climate == "cold":
@@ -16,7 +26,7 @@ def spread_inside_country(country, disease) -> None:
         return
 
     mult = climate_multiplier(country.climate, disease)
-    awareness_penalty = country.awareness * 0.8
+    awareness_penalty = country.awareness * _AWARENESS_SPREAD_PENALTY
     effective_rate = disease.infectivity * mult * 0.05 * (1.0 - awareness_penalty)
 
     new_infected = int(country.healthy * effective_rate * country.infection_ratio)
