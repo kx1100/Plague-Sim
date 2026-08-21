@@ -155,6 +155,17 @@ more, so short IDs written with a space (`"Air 1"`) are not recovered.
 See [LOCAL_DEV.md](LOCAL_DEV.md) for the full Ollama dev loop and the Mesocosm
 submission commands.
 
+## Watching a run back
+
+[showcase/index.html](showcase/index.html) replays one episode day by day --
+the chart, a 71-country map, the model's reasoning and the trait it bought each
+turn. Open the file directly; there is no build step and nothing is fetched.
+
+It uses a real exported run at `showcase/data/replay.json` when there is one
+(`mesocosm run export RUN_ID -o showcase/data/replay.json`) and otherwise falls
+back to a bundled sample of the reference expert policy, saying so on screen.
+See [showcase/README.md](showcase/README.md).
+
 ## Balance and calibration
 
 An environment that ranks models on an artifact is worse than no environment, so
@@ -240,5 +251,6 @@ models/                Country, Disease, GameState, world_builder
 simulation/            spread, deaths, cure, dna, actions
 tools/calibrate.py     balance harness and acceptance targets
 tests/                 96 tests: sim mechanics, env lifecycle, adapter, balance
-showcase/              example replay data for the (pending) replay UI
+showcase/index.html    replay UI -- open it directly, no build step
+tools/make_example_replay.py  regenerates the showcase's bundled sample
 ```

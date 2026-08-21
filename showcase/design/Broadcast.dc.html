@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: "Archivo", system-ui, sans-serif; }
+    a { color: oklch(0.72 0.16 235); }
+    a:hover { color: oklch(0.82 0.13 235); }
+  </style>
+</helmet>
+
+<div style="width: 1280px; height: 880px; background: oklch(0.16 0.012 265); color: oklch(0.95 0.005 265); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; font-feature-settings: 'tnum' 1;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 40px; background: {{accent}}; color: oklch(0.16 0.012 265);">
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <span style="font-size: 14px; font-weight: 800; letter-spacing: 0.16em;">PLAGUE SIM</span>
+      <span style="width: 1px; height: 16px; background: oklch(0.16 0.012 265); opacity: 0.4;"></span>
+      <span style="font-size: 14px; font-weight: 600; letter-spacing: 0.06em;">[MODEL] · SEED USA</span>
+    </div>
+    <span style="font-size: 13px; font-weight: 700; letter-spacing: 0.14em;">EPISODE 1 / 5 · REPLAY</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid oklch(0.30 0.015 265);">
+    <div style="padding: 22px 40px; border-right: 1px solid oklch(0.30 0.015 265);">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: oklch(0.68 0.012 265);">DAY</div>
+      <div style="font-size: 58px; font-weight: 800; line-height: 1.0; letter-spacing: -0.02em;">326</div>
+    </div>
+    <div style="padding: 22px 28px; border-right: 1px solid oklch(0.30 0.015 265);">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: oklch(0.68 0.012 265);">WORLD REACHED</div>
+      <div style="font-size: 58px; font-weight: 800; line-height: 1.0; letter-spacing: -0.02em; color: {{accent}};">95.4<span style="font-size: 30px;">%</span></div>
+    </div>
+    <div style="padding: 22px 28px; border-right: 1px solid oklch(0.30 0.015 265);">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: oklch(0.68 0.012 265);">CURE</div>
+      <div style="font-size: 58px; font-weight: 800; line-height: 1.0; letter-spacing: -0.02em; color: oklch(0.72 0.16 235);">53.5<span style="font-size: 30px;">%</span></div>
+    </div>
+    <div style="padding: 22px 28px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: oklch(0.68 0.012 265);">DNA BANKED</div>
+      <div style="font-size: 58px; font-weight: 800; line-height: 1.0; letter-spacing: -0.02em;">1</div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr); gap: 40px; padding: 30px 40px 0; min-height: 0;">
+
+    <div style="display: flex; flex-direction: column; gap: 26px; min-height: 0;">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: oklch(0.68 0.012 265);">7,093,316,000 PEOPLE</span>
+        <div style="display: flex; height: 68px; width: 100%;">
+          <div style="width: 76.8%; background: {{accent}}; display: flex; align-items: center; padding-left: 16px;">
+            <span style="font-size: 26px; font-weight: 800; color: oklch(0.16 0.012 265);">76.8%</span>
+          </div>
+          <div style="width: 18.6%; background: oklch(0.45 0.14 25); display: flex; align-items: center; padding-left: 12px;">
+            <span style="font-size: 22px; font-weight: 800;">18.6%</span>
+          </div>
+          <div style="width: 4.6%; background: oklch(0.32 0.014 265);"></div>
+        </div>
+        <div style="display: flex; gap: 26px; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; color: oklch(0.68 0.012 265);">
+          <span>INFECTED 5.45B</span>
+          <span>DEAD 1.32B</span>
+          <span>STILL HEALTHY 326M</span>
+        </div>
+      </div>
+
+      <div style="background: oklch(0.22 0.015 265); border-left: 4px solid {{accent}}; padding: 22px 26px; display: flex; flex-direction: column; gap: 14px; flex-grow: 1; min-height: 0;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="font-size: 12px; font-weight: 800; letter-spacing: 0.16em; color: {{accent}};">COMMENTARY</span>
+          <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.1em; color: oklch(0.68 0.012 265);">TURN 326</span>
+        </div>
+        <p style="margin: 0; font-size: 19px; font-weight: 400; line-height: 1.55; text-wrap: pretty;">Cure is at 53% and climbing about six tenths of a point a day, so I have roughly seventy days of runway left. Infection has plateaued near 77% — more transmission buys me very little now. What is left is converting reach into deaths before the research lands.</p>
+        <div style="display: flex; align-items: center; gap: 14px; margin-top: auto;">
+          <span style="background: {{accent}}; color: oklch(0.16 0.012 265); font-size: 15px; font-weight: 800; letter-spacing: 0.04em; padding: 8px 14px;">EVOLVE · INTERNAL HAEMORRHAGING</span>
+          <span style="font-size: 14px; font-weight: 600; color: oklch(0.68 0.012 265);">12 DNA · SYMPTOM</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 22px; min-height: 0;">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: oklch(0.68 0.012 265);">COUNTRIES</span>
+          <span style="font-size: 20px; font-weight: 800;">71 / 71</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 5px;">
+          <sc-for list="{{countries}}" as="c" hint-placeholder-count="71">
+            <div style="aspect-ratio: 1; background: {{c.fill}};"></div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+          <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.16em; color: oklch(0.68 0.012 265);">TRAITS</span>
+          <span style="font-size: 20px; font-weight: 800;">38 / 60</span>
+        </div>
+        <sc-for list="{{trees}}" as="row" hint-placeholder-count="3">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; color: oklch(0.68 0.012 265); width: 96px;">{{row.name}}</span>
+            <div style="flex-grow: 1; height: 10px; background: oklch(0.28 0.014 265);">
+              <div style="height: 10px; width: {{row.pct}}; background: {{row.color}};"></div>
+            </div>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: oklch(0.78 0.01 265); width: 42px; text-align: right;">{{row.label}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 22px; padding: 24px 40px 30px;">
+    <div style="width: 52px; height: 52px; border-radius: 50%; background: {{accent}}; display: flex; align-items: center; justify-content: center;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="oklch(0.16 0.012 265)" stroke="none"><polygon points="7 4 20 12 7 20"></polygon></svg>
+    </div>
+    <div style="flex-grow: 1; position: relative; height: 52px; display: flex; align-items: center;">
+      <div style="height: 6px; width: 100%; background: oklch(0.28 0.014 265);"></div>
+      <div style="position: absolute; left: 0; height: 6px; width: 81.5%; background: {{accent}};"></div>
+      <sc-for list="{{ticks}}" as="tick" hint-placeholder-count="12">
+        <div style="position: absolute; left: {{tick.x}}; width: 2px; height: 16px; background: oklch(0.62 0.015 265);"></div>
+      </sc-for>
+      <div style="position: absolute; left: 81.5%; width: 4px; height: 30px; background: oklch(0.95 0.005 265);"></div>
+    </div>
+    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 15px; font-weight: 500; color: oklch(0.78 0.01 265);">326 / 400</span>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#f0642f","options":["#f0642f","#3fd18b","#e0c02f","#5c8cf0"]}}'>
+const ACTION_DAYS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,23,25,32,160,214,255,256,257,258,260,264,271,277,284,288,290,296,300,307,313,326,337,347,359];
+
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#f0642f';
+    return {
+      accent,
+      countries: Array.from({ length: 71 }, () => ({ fill: accent })),
+      trees: [
+        { name: 'SYMPTOM', label: '24/32', pct: '75%', color: 'oklch(0.55 0.16 25)' },
+        { name: 'TRANSMISSION', label: '8/17', pct: '47%', color: accent },
+        { name: 'ABILITY', label: '6/11', pct: '55%', color: 'oklch(0.72 0.16 235)' },
+      ],
+      ticks: ACTION_DAYS.map((d) => ({ x: `${(d / 400 * 100).toFixed(2)}%` })),
+    };
+  }
+}
+</script>
+</body>
+</html>
