@@ -7,7 +7,8 @@ Usage:
 
 Endpoints:
     GET  /health    — liveness check
-    POST /reset     — start a new episode  { "seed": <str|int|null> }
+    POST /reset     — start a new episode  { "seed": <str|int|null>,
+                                            "rng_seed": <int|str|null> }
     POST /step      — advance one tick      { "action": <trait_id|null> }
     POST /close     — tear down the env
     GET  /render    — human-readable state snapshot
@@ -49,9 +50,13 @@ class Handler(BaseHTTPRequestHandler):
 
         if self.path == "/reset":
             seed = body.get("seed", None)
+            rng_seed = body.get("rng_seed", None)
             try:
-                obs = _env.reset(seed=seed)
-                self._send_json({"observation": obs})
+                obs = _env.reset(seed=seed, rng_seed=rng_seed)
+                # Echo the seed actually used. An episode started without one
+                # draws its own, and returning it is what lets a harness log a
+                # run that can be replayed exactly.
+                self._send_json({"observation": obs, "rng_seed": _env.rng_seed})
             except ValueError as exc:
                 self._send_json({"error": str(exc)}, status=400)
 

@@ -532,8 +532,11 @@ class EnvClient:
         except (urllib.error.URLError, OSError):
             return False
 
-    def reset(self, seed):
-        return self._post("/reset", {"seed": seed})["observation"]
+    def reset(self, seed, rng_seed=None):
+        out = self._post("/reset", {"seed": seed, "rng_seed": rng_seed})
+        # Older adapters do not echo the seed; fall back to what was asked for
+        # rather than recording a null into the run.
+        return out["observation"], out.get("rng_seed", rng_seed if rng_seed is not None else seed)
 
     def step(self, action):
         out = self._post("/step", {"action": action})
@@ -563,7 +566,7 @@ _AFTER_KEYS = _OBS_KEYS + ("evolved_traits",)
 
 
 def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dict:
-    obs = env.reset(seed)
+    obs, rng_seed = env.reset(seed, args.rng_seed)
     turns, history, done, step = [], [], False, 0
     truncated, terminal = None, None
 
@@ -641,6 +644,7 @@ def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dic
         }
     return {
         "seed": seed,
+        "rng_seed": rng_seed,
         "steps": step,
         "done": done,
         "truncated": truncated,
@@ -759,6 +763,11 @@ def main() -> int:
     parser.add_argument("--episodes", type=int, default=5,
                         help="Episode count. Ignored when --seeds names them explicitly.")
     parser.add_argument("--seeds", help="Comma-separated country names or integers")
+    parser.add_argument("--rng-seed", type=int,
+                        help="Force every episode's world RNG to this seed. Omitted, each "
+                             "episode derives it from its own seed, so a seed list replays "
+                             "identically for every model — which is what makes two models' "
+                             "scores comparable.")
     parser.add_argument("--max-steps", type=int, default=600, help="Day cap per episode")
     parser.add_argument("--env-url", default="http://localhost:8765")
     parser.add_argument("--manifest", default=str(ROOT / "benchanything.json"))
@@ -837,7 +846,7 @@ def main() -> int:
     if args.probe:
         if not agent.uses_model:
             raise SystemExit("--probe needs a model backend; policy/* makes no calls.")
-        obs = env.reset(seeds[0])
+        obs, _ = env.reset(seeds[0], args.rng_seed)
         user = build_user_prompt(obs, [])
         print("─" * 70)
         print(system_prompt)
@@ -908,7 +917,8 @@ def main() -> int:
             "generated_by": f"tools/bench_local.py — {agent.describe()}",
             "run": {"config": {"model": args.model}},
             "episodes": [
-                {"id": key, "seed": ep["seed"], "terminal_info": ep["score"]}
+                {"id": key, "seed": ep["seed"], "rng_seed": ep["rng_seed"],
+                 "terminal_info": ep["score"]}
                 for key, ep in keyed
             ],
             "replay": {key: ep["turns"] for key, ep in keyed},

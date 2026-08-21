@@ -142,8 +142,16 @@ curl -X POST localhost:8765/step  -d '{"action":"Air1"}'
 ```
 
 Routes: `GET /health`, `GET /render`, `POST /reset`, `POST /step`, `POST /close`.
-Seeds may be a country name, an integer (used as `random.seed` plus a country
-index, and reproducible), or null for a random country.
+Seeds may be a country name, an integer (a country index), or null for a country
+drawn at random.
+
+**Episodes are reproducible.** Each one owns a `random.Random` seeded from
+`rng_seed`, which defaults to `seed` — so the same seed always replays the same
+world, and an episode is unaffected by whatever ran before it in the same
+process. `/reset` echoes the seed it used, so an episode started without one can
+still be replayed exactly. Pass `rng_seed` explicitly to run repeats on a single
+country. This is what makes two agents' scores comparable: given the same seed
+list, they face identical worlds.
 
 The adapter also normalises natural-language output from weaker models: an
 action of `"lets go with cold_resist"` resolves to `ColdResist1`, and to

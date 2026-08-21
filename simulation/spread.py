@@ -1,5 +1,11 @@
 import random
 
+# The air and sea routes are the only stochastic part of the simulation. They
+# take an `rng` so one episode's draws come from one generator owned by that
+# episode -- see models/game_state.py. The module-level `random` default keeps
+# direct callers (tests, one-off scripts) working, but the environment always
+# passes its own, or two episodes in one process are not independent runs.
+
 # How much a fully aware population suppresses internal spread. Awareness
 # saturates at 1.0 in every country well before the endgame, so this sets the
 # floor on late-game transmission: at 0.8 spread fell to 20% of base and the
@@ -64,7 +70,7 @@ def spread_land_borders(countries: dict, disease) -> None:
         dest.infected += min(count, dest.healthy)
 
 
-def spread_air_routes(countries: dict, disease) -> None:
+def spread_air_routes(countries: dict, disease, rng=random) -> None:
     airport_list = [c for c in countries.values() if c.airports > 0]
     sources = [c for c in airport_list if c.infected > 0 and c.infection_ratio >= 0.001]
 
@@ -82,7 +88,7 @@ def spread_air_routes(countries: dict, disease) -> None:
             continue
 
         for _ in range(src.airports):
-            dest = random.choice(airport_list)
+            dest = rng.choice(airport_list)
             if dest is src or dest.healthy <= 0:
                 continue
             dest_closure = max(0.0, dest.awareness - 0.5) * 2.0
@@ -91,7 +97,7 @@ def spread_air_routes(countries: dict, disease) -> None:
             dest.infected += min(seed, dest.healthy)
 
 
-def spread_sea_routes(countries: dict, disease) -> None:
+def spread_sea_routes(countries: dict, disease, rng=random) -> None:
     port_list = [c for c in countries.values() if c.ports > 0]
     sources = [c for c in port_list if c.infected > 0 and c.infection_ratio >= 0.001]
 
@@ -108,7 +114,7 @@ def spread_sea_routes(countries: dict, disease) -> None:
             continue
 
         for _ in range(src.ports):
-            dest = random.choice(port_list)
+            dest = rng.choice(port_list)
             if dest is src or dest.healthy <= 0:
                 continue
             dest_closure = max(0.0, dest.awareness - 0.6) * 2.5

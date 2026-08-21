@@ -22,9 +22,9 @@ TREE_COST = sum(t["cost"] for t in TRAITS.values())
 
 
 def _play(policy, seed_country="India", rng_seed=0) -> PlagueEnv:
-    random.seed(rng_seed)
+    random.seed(rng_seed)          # _random_policy's own choices
     env = PlagueEnv()
-    env.reset(seed_country)
+    env.reset(seed_country, rng_seed=rng_seed)   # the world's
     done = False
     while not done and env.game.day < 600:
         _, _, done, _ = env.step(policy(env.observation()))

@@ -41,7 +41,7 @@
 
     "episode": {
       "max_steps": 600,
-      "deterministic_reset": false,
+      "deterministic_reset": true,
       "supports_seed": true,
       "parallel_episodes": 1,
       "observability": "full"
@@ -98,14 +98,21 @@
   "env": {
     "file": "env.py",
     "class": "PlagueEnv",
-    "seed_types": ["string (country name)", "integer (random.seed + country index)", "null (random)"]
+    "seed_types": ["string (country name)", "integer (country index)", "null (drawn from the episode RNG and reported back)"],
+    "determinism": "Each episode owns a random.Random seeded from rng_seed (defaulting to seed). Episodes are independent of each other and of the order they run in, so two agents given the same seed list face identical worlds."
   },
 
   "episode_detail": {
     "reset": {
       "endpoint": "POST /reset",
-      "body": { "seed": "<string | integer | null>" },
-      "returns": { "observation": "<obs object>" }
+      "body": {
+        "seed": "<string | integer | null>",
+        "rng_seed": "<integer | string | null> — the episode's random generator. Defaults to `seed`, so the same seed always replays the same world. Pass it explicitly to run repeats on one seed country."
+      },
+      "returns": {
+        "observation": "<obs object>",
+        "rng_seed": "The seed actually used. An episode started without one draws its own and reports it here, so any run can be replayed exactly."
+      }
     }
   },
 

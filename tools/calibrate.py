@@ -117,9 +117,15 @@ POLICIES = {
 # ── Episode runner ────────────────────────────────────────────────────────────
 
 def run_episode(policy, seed_country: str, rng_seed: int) -> dict:
+    # Two generators, deliberately: `rng_seed` goes to the env so every policy
+    # meets the same world for a given country, and the module-level seed makes
+    # policy_random's own choices repeatable. They were one generator until the
+    # env took ownership of its episode, which made a policy's draws and the
+    # world's draws interleave -- so what a policy scored depended on how many
+    # times it had rolled the dice.
     random.seed(rng_seed)
     env = PlagueEnv()
-    env.reset(seed_country)
+    env.reset(seed_country, rng_seed=rng_seed)
 
     done = False
     while not done and env.game.day < 600:

@@ -32,23 +32,38 @@ class PlagueEnv:
         self._seed_country: str | None = None
         self._milestones: dict = {}   # tracks days_to_X benchmarks
         self.max_steps = max_steps
+        self.rng_seed = None          # the seed the last episode actually used
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    def reset(self, seed=None) -> dict:
+    def reset(self, seed=None, rng_seed=None) -> dict:
         """
-        seed : country name (str)  → seed that specific country
-               integer             → used as random.seed + country index
-               None                → random country
+        seed     : country name (str)  → seed that specific country
+                   integer             → country index
+                   None                → country drawn from this episode's RNG
+        rng_seed : seed for this episode's generator. Defaults to `seed`, so
+                   the same seed always replays the same world; when both are
+                   None one is drawn and recorded on `self.rng_seed`, so even
+                   an unseeded episode can be reproduced after the fact.
+
+        The episode's randomness lives in its own `random.Random`, never the
+        module-level generator. Two agents given the same seed therefore face
+        the same world regardless of what else ran in the process first --
+        which is the whole basis for comparing one agent's score to another's.
+
         Returns the initial observation.
         """
-        self.game = GameState()
+        if rng_seed is None:
+            rng_seed = seed if seed is not None else _random.randrange(2 ** 32)
+        self.rng_seed = rng_seed
+
+        rng = _random.Random(rng_seed)
+        self.game = GameState(rng=rng)
         self._milestones = {}
 
         country_names = sorted(self.game.countries.keys())
 
         if isinstance(seed, int):
-            _random.seed(seed)
             self._seed_country = country_names[seed % len(country_names)]
         elif isinstance(seed, str):
             if seed not in self.game.countries:
@@ -58,7 +73,7 @@ class PlagueEnv:
                 )
             self._seed_country = seed
         else:
-            self._seed_country = _random.choice(country_names)
+            self._seed_country = rng.choice(country_names)
 
         self.game.countries[self._seed_country].infected = 500_000
         self.game.dna = 15

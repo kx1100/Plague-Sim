@@ -1,3 +1,5 @@
+import random
+
 from models.disease import Disease
 from models.world_builder import build_world
 
@@ -14,7 +16,13 @@ _EXTINCTION_THRESHOLD = 0.95
 
 
 class GameState:
-    def __init__(self):
+    def __init__(self, rng: random.Random | None = None):
+        # One generator per game, so episodes run back to back in a single
+        # process are independent of each other and of their order. Drawing
+        # from the module-level `random` instead made episode N depend on
+        # episodes 1..N-1, which quietly invalidates any comparison between
+        # two agents that were not run in exactly the same sequence.
+        self.rng = rng if rng is not None else random.Random()
         self.day = 0
         self.dna = 0
         self.cure_progress = 0.0
@@ -86,8 +94,8 @@ class GameState:
             spread_inside_country(country, self.disease)
 
         spread_land_borders(self.countries, self.disease)
-        spread_air_routes(self.countries, self.disease)
-        spread_sea_routes(self.countries, self.disease)
+        spread_air_routes(self.countries, self.disease, self.rng)
+        spread_sea_routes(self.countries, self.disease, self.rng)
 
         newly_infected_countries = sum(
             1
