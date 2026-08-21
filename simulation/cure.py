@@ -1,3 +1,22 @@
+# Per-country research contribution, scaled by wealth and awareness.
+#
+# This is the clock the disease races, and it is the main difficulty dial.
+# Tuned against win rate: at 0.000045 nothing ever wins, at 0.00004 the expert
+# reference policy wins 9/10 which makes winning routine. At 0.000042 it wins
+# 2/10 while careless play never wins -- a real achievement with headroom left
+# for a smarter agent.
+_CURE_CONTRIBUTION = 0.000042
+
+# How sharply symptom severity accelerates research.
+#
+# This is what makes severity management the core skill: a flashy plague is
+# cured fast, a quiet one is given time. At the original 2.0 the penalty was too
+# soft to punish careless symptom buying, and separating good play from bad
+# meant making the world easier for everyone. At 5.0 careless play stalls near
+# 25% infected while patient play reaches saturation.
+_SEVERITY_CURE_SENSITIVITY = 5.0
+
+
 def update_awareness(game) -> None:
     """
     Countries become aware based on visible infection.
@@ -21,12 +40,12 @@ def update_cure(game) -> None:
         return
 
     total_contrib = sum(
-        c.wealth * c.awareness * 0.0001
+        c.wealth * c.awareness * _CURE_CONTRIBUTION
         for c in game.countries.values()
         if c.awareness > 0
     )
 
-    severity_boost = 1.0 + game.disease.severity * 2.0
+    severity_boost = 1.0 + game.disease.severity * _SEVERITY_CURE_SENSITIVITY
     drug_penalty = max(0.1, 1.0 - game.disease.drug_resist * 0.15)
     hardening_penalty = max(0.1, 1.0 - game.disease.genetic_hardening * 0.15)
     insanity_penalty = 0.9 if "Insanity" in game.disease.evolved else 1.0

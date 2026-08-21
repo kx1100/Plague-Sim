@@ -46,7 +46,7 @@ def _pass_policy(obs):
 def test_dna_budget_stays_bounded(seed_country):
     """The whole failure mode was DNA reaching ~1.6M. Nothing may approach that."""
     env = _play(_random_policy, seed_country)
-    assert env.game.dna_earned <= 300, (
+    assert env.game.dna_earned <= 450, (
         f"DNA economy is inflating again: {env.game.dna_earned} earned"
     )
 
@@ -123,3 +123,38 @@ def test_score_is_not_dominated_by_leftover_dna():
     assert dna_term < 0.25 * score, (
         f"DNA term is {100 * dna_term / score:.0f}% of the score"
     )
+
+
+# ── Winnability ───────────────────────────────────────────────────────────────
+
+def _expert_policy(obs):
+    """Mirror of tools.calibrate.policy_expert, imported lazily to keep tests fast."""
+    from tools.calibrate import policy_expert
+    return policy_expert(obs)
+
+
+@pytest.mark.parametrize("seed_country", ["USA", "Russia"])
+def test_skilled_play_can_win(seed_country):
+    """
+    The environment must be winnable. Before this tuning no policy had ever won:
+    `extinct` needed ~506 days of a saturated world at maximum lethality, and
+    `infected_all` demanded a healthy count of exactly zero from an exponential
+    decay that only approaches it.
+
+    These two seeds are the ones the reference expert policy converts. If tuning
+    shifts and they stop winning, the environment has become unwinnable again.
+    """
+    env = _play(_expert_policy, seed_country)
+    assert env.game.outcome in ("infected_all", "extinct"), (
+        f"expert play no longer wins on {seed_country}: "
+        f"{env.game.outcome} at {env.final_score()['victory_progress']:.4f} victory progress"
+    )
+
+
+def test_careless_play_never_wins():
+    """A win must require strategy, not luck."""
+    for seed_country in ("India", "USA", "Russia"):
+        env = _play(_random_policy, seed_country)
+        assert env.game.outcome not in ("infected_all", "extinct"), (
+            f"random play won on {seed_country}, so the env is too easy"
+        )

@@ -1,6 +1,17 @@
 from models.disease import Disease
 from models.world_builder import build_world
 
+# Fraction of humanity that may remain healthy and still count as full saturation.
+#
+# Internal spread is exponential decay of the healthy population, so it
+# approaches zero asymptotically and never actually arrives -- requiring
+# literally every human would make `infected_all` unreachable by construction
+# rather than by difficulty. 0.1% of 7.09B is ~7M stragglers.
+_SATURATION_THRESHOLD = 0.001
+
+# Share of humanity that must be dead for the premium `extinct` outcome.
+_EXTINCTION_THRESHOLD = 0.95
+
 
 class GameState:
     def __init__(self):
@@ -9,7 +20,7 @@ class GameState:
         self.cure_progress = 0.0
         self.infection_milestones_awarded = 0  # cumulative infection bubbles paid
         self.death_milestones_awarded = 0      # cumulative death bubbles paid
-        self.dna_earned = 0                # lifetime DNA granted (excludes starting stock)
+        self.dna_earned = 0                    # lifetime DNA granted (excludes start)
         self.game_over = False
         self.outcome = None  # "cured" | "extinct" | "infected_all" | "died_out"
         self.disease = Disease()
@@ -107,13 +118,14 @@ class GameState:
             self.outcome = "cured"
             return
 
+        total_pop = self.total_population()
         total_healthy = sum(c.healthy for c in self.countries.values())
-        if total_healthy <= 0:
+        if total_healthy <= total_pop * _SATURATION_THRESHOLD:
             self.game_over = True
-            total_pop = self.total_population()
-            total_dead = self.total_dead()
             self.outcome = (
-                "extinct" if total_dead / total_pop > 0.95 else "infected_all"
+                "extinct"
+                if self.total_dead() / total_pop > _EXTINCTION_THRESHOLD
+                else "infected_all"
             )
             return
 

@@ -390,3 +390,65 @@ def test_insanity_is_still_devolvable(game):
 
     assert devolve_trait(game, "Insanity") == 2
     assert "Insanity" not in game.disease.evolved
+
+
+# ── Saturation threshold and victory progress ─────────────────────────────────
+
+def test_saturation_threshold_ends_the_game(game):
+    """
+    Internal spread is exponential decay of the healthy population, so it never
+    literally reaches zero. A small residue must still count as full saturation.
+    """
+    total = game.total_population()
+    residue = int(total * 0.0005)          # 0.05%, under the 0.1% threshold
+    for country in game.countries.values():
+        country.infected = country.population
+        country.dead = 0
+    india = game.countries["India"]
+    india.infected = india.population - residue
+
+    game._check_game_over()
+    assert game.game_over and game.outcome == "infected_all"
+
+
+def test_a_real_healthy_population_does_not_end_the_game(game):
+    """5% healthy is a live game, not a win."""
+    for country in game.countries.values():
+        country.infected = int(country.population * 0.95)
+        country.dead = 0
+    game._check_game_over()
+    assert not game.game_over
+
+
+def test_extinct_outranks_infected_all(game):
+    for country in game.countries.values():
+        country.dead = country.population
+        country.infected = 0
+    game._check_game_over()
+    assert game.outcome == "extinct"
+
+
+def test_victory_progress_bounds():
+    env = PlagueEnv()
+    env.reset("India")
+    score = env.final_score()
+    assert 0.0 <= score["victory_progress"] <= 1.0
+    assert 0.0 <= score["extinction_progress"] <= 1.0
+
+
+def test_victory_progress_tracks_reach():
+    env = PlagueEnv()
+    env.reset("India")
+    start = env.final_score()["victory_progress"]
+    for country in env.game.countries.values():
+        country.infected = country.population // 2
+    assert env.final_score()["victory_progress"] > start
+
+
+def test_extinction_progress_reaches_one_at_threshold():
+    env = PlagueEnv()
+    env.reset("India")
+    for country in env.game.countries.values():
+        country.dead = country.population
+        country.infected = 0
+    assert env.final_score()["extinction_progress"] == 1.0

@@ -26,7 +26,7 @@ _INFECTION_BUBBLE_VALUE = 2            # -> at most 100 DNA
 
 # Death milestones are awarded on CUMULATIVE deaths, not per-tick deaths.
 _DEATH_MILESTONE_FRACTION = 0.005      # one milestone per 0.5% of the world dead
-_DEATH_BUBBLE_VALUE = 2                # -> at most 400 DNA, and only for a total kill
+_DEATH_BUBBLE_VALUE = 1                # -> at most 200 DNA, and only for a total kill
 
 # Backstop. Bounds any single day regardless of how many events land at once, so
 # a future source cannot quietly reintroduce runaway growth.
@@ -42,7 +42,7 @@ def generate_dna(
     Award DNA for this tick:
       - Each newly infected country pays a bubble worth 2-3 DNA.
       - Each 2% of the world reached pays 1 DNA, once.
-      - Each 0.5% of the world killed pays 2 DNA, once.
+      - Each 0.5% of the world killed pays 1 DNA, once.
       - Nothing accrues passively; sitting still earns nothing.
     The daily total is capped at _MAX_DNA_PER_DAY.
     """

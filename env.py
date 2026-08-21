@@ -11,6 +11,10 @@ from models.game_state import GameState
 from simulation.actions import evolve_trait, devolve_trait
 from data.traits import get_affordable_traits, TRAITS
 
+# Fraction of humanity that must die for the `extinct` outcome. Mirrors the
+# threshold in GameState._check_game_over.
+_EXTINCTION_THRESHOLD = 0.95
+
 
 class PlagueEnv:
     """
@@ -143,6 +147,8 @@ class PlagueEnv:
         return {
             "outcome": g.outcome,
             "day": g.day,
+            "victory_progress": self._victory_progress(),
+            "extinction_progress": self._extinction_progress(),
             "plague_score": self._plague_score(),
             "infected_pct": round(infected / total * 100, 2),
             "dead_pct": round(dead / total * 100, 2),
@@ -157,6 +163,31 @@ class PlagueEnv:
         }
 
     # ── Internal ──────────────────────────────────────────────────────────────
+
+    def _victory_progress(self) -> float:
+        """
+        Distance to a win, in [0, 1]. 1.0 means no healthy humans remain, which
+        is the `infected_all` victory condition.
+
+        This is the primary metric: winning is reachable but rare, so agents are
+        ranked by how close they got rather than by a mostly-constant outcome.
+        """
+        g = self.game
+        total = g.total_population()
+        if total == 0:
+            return 0.0
+        return round((g.total_infected() + g.total_dead()) / total, 4)
+
+    def _extinction_progress(self) -> float:
+        """
+        Distance to the `extinct` win, in [0, 1]. 1.0 means the 95%-dead
+        threshold has been reached.
+        """
+        g = self.game
+        total = g.total_population()
+        if total == 0:
+            return 0.0
+        return round(min(1.0, g.total_dead() / (total * _EXTINCTION_THRESHOLD)), 4)
 
     def _plague_score(self) -> float:
         """
