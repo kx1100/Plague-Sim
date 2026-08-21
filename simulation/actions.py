@@ -2,12 +2,23 @@ from data.traits import TRAITS
 
 _DEVOLVE_REFUND = 2  # flat DNA returned per devolve
 
+# Cure rollback granted the first time each ReShuffle trait is evolved.
+_RESHUFFLE_ROLLBACK = {
+    "reshuffle_25": 0.25,
+    "reshuffle_40": 0.40,
+    "reshuffle_60": 0.60,
+}
+
+# Specials that fire once per game. Traits carrying one cannot be devolved,
+# because devolve/re-evolve would otherwise re-trigger the effect.
+_ONE_TIME_SPECIALS = frozenset(_RESHUFFLE_ROLLBACK)
+
 
 def evolve_trait(game, trait_id: str) -> bool:
     """
     Spend DNA to evolve a trait. Returns True on success.
     Prereqs must be met, trait must not already be evolved, DNA must be sufficient.
-    Reshuffle traits immediately roll back cure progress.
+    ReShuffle traits roll the cure back the first time they are evolved, once each.
     """
     if trait_id not in TRAITS:
         return False
@@ -26,27 +37,32 @@ def evolve_trait(game, trait_id: str) -> bool:
     game.dna -= trait["cost"]
     game.disease.evolve(trait_id, trait)
 
-    special = trait.get("special", "")
-    if special == "reshuffle_25":
-        game.cure_progress = max(0.0, game.cure_progress - 0.25)
-    elif special == "reshuffle_40":
-        game.cure_progress = max(0.0, game.cure_progress - 0.40)
-    elif special == "reshuffle_60":
-        game.cure_progress = max(0.0, game.cure_progress - 0.60)
+    rollback = _RESHUFFLE_ROLLBACK.get(trait.get("special", ""))
+    if rollback is not None and trait_id not in game.disease.used_specials:
+        game.cure_progress = max(0.0, game.cure_progress - rollback)
+        game.disease.used_specials.add(trait_id)
 
     return True
 
 
 def devolve_trait(game, trait_id: str) -> int:
     """
-    Devolve a single trait. Returns _DEVOLVE_REFUND (2 DNA) on success, 0 if not evolved.
-    Subsequent traits that required this trait as a prereq are NOT removed — they remain
-    evolved but their prereq is no longer met. Reshuffle cure rollbacks are NOT reversed.
+    Devolve a single trait. Returns _DEVOLVE_REFUND (2 DNA) on success, 0 if the
+    trait is not evolved or is a one-time-use special.
+
+    Subsequent traits that required this trait as a prereq are NOT removed -- they
+    remain evolved but their prereq is no longer met.
     """
     if trait_id not in TRAITS or trait_id not in game.disease.evolved:
         return 0
 
     trait = TRAITS[trait_id]
+
+    # One-time-use traits are locked in. Allowing a devolve here would let the
+    # agent recycle the cure rollback for the 2 DNA refund, over and over.
+    if trait.get("special") in _ONE_TIME_SPECIALS:
+        return 0
+
     for stat, delta in trait["effects"].items():
         current = getattr(game.disease, stat, 0)
         new_val = current - delta

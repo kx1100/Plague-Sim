@@ -19,6 +19,11 @@ class Disease:
 
     evolved: set[str] = field(default_factory=set)
 
+    # One-time-use specials (the Genetic ReShuffles) that have already fired.
+    # Tracked separately from `evolved` so that devolving a trait cannot re-arm
+    # its special, which would let an agent reset the cure indefinitely.
+    used_specials: set[str] = field(default_factory=set)
+
     def evolve(self, trait_id: str, trait_data: dict):
         """
         Apply a trait's effects to this disease.
