@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: "Newsreader", Georgia, serif; }
+    a { color: oklch(0.55 0.13 40); }
+    a:hover { color: oklch(0.42 0.12 40); }
+  </style>
+</helmet>
+
+<div style="width: 1280px; height: 880px; background: oklch(0.975 0.012 85); color: oklch(0.24 0.02 60); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; font-feature-settings: 'tnum' 1;">
+
+  <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 34px 56px 16px; border-bottom: 2px solid oklch(0.24 0.02 60);">
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.18em; color: oklch(0.52 0.03 60);">PLAGUE SIM · BENCHMARK REPLAY</span>
+      <span style="font-size: 34px; font-weight: 400; line-height: 1.1;">[MODEL] plays the plague</span>
+    </div>
+    <div style="text-align: right; font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; line-height: 1.7; color: oklch(0.44 0.03 60);">
+      <div>seed <span style="color: oklch(0.24 0.02 60); font-weight: 600;">USA</span> · 400 days · 41 actions</div>
+      <div>finished <span style="color: {{accent}}; font-weight: 600;">infected_all</span> — 99.9% of humanity reached</div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 56px; padding: 34px 56px 24px; min-height: 0;">
+
+    <div style="display: flex; flex-direction: column; gap: 22px; min-height: 0;">
+      <div style="display: flex; align-items: baseline; gap: 12px;">
+        <span style="font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.18em; color: oklch(0.52 0.03 60);">TURN 326</span>
+        <span style="flex-grow: 1; height: 1px; background: oklch(0.87 0.012 85);"></span>
+        <span style="font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; letter-spacing: 0.1em; color: oklch(0.52 0.03 60);">DAY 326 OF 400</span>
+      </div>
+
+      <p style="margin: 0; font-size: 30px; font-weight: 300; line-height: 1.42; letter-spacing: -0.008em; text-wrap: pretty;">Cure is at 53% and climbing about six tenths of a point a day, so I have roughly seventy days of runway left. Infection has plateaued near 77% — more transmission buys me very little now.</p>
+
+      <p style="margin: 0; font-size: 19px; font-weight: 300; line-height: 1.6; color: oklch(0.38 0.025 60); text-wrap: pretty;">What is left is converting reach into deaths before the research lands. Internal Haemorrhaging is the best severity-per-DNA I can afford at 12, and I am holding Air 2 back for the final stretch.</p>
+
+      <div style="display: flex; align-items: center; gap: 14px; padding: 16px 0 0; border-top: 1px solid oklch(0.87 0.012 85); margin-top: auto;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="1.5"><line x1="4" y1="12" x2="19" y2="12"></line><polyline points="13 6 19 12 13 18"></polyline></svg>
+        <span style="font-size: 24px; font-weight: 400;">Internal Haemorrhaging</span>
+        <span style="font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; color: oklch(0.52 0.03 60); letter-spacing: 0.06em;">SYMPTOM · 12 DNA · 1 LEFT IN THE BANK</span>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 20px; border-left: 1px solid oklch(0.87 0.012 85); padding-left: 32px; min-height: 0;">
+      <span style="font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.18em; color: oklch(0.52 0.03 60);">THE RUN SO FAR</span>
+
+      <sc-for list="{{stats}}" as="stat" hint-placeholder-count="3">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between;">
+            <span style="font-size: 17px; font-weight: 400;">{{stat.name}}</span>
+            <span style="font-family: 'IBM Plex Sans', sans-serif; font-size: 20px; font-weight: 500; color: {{stat.color}};">{{stat.value}}</span>
+          </div>
+          <svg viewBox="0 0 300 44" preserveAspectRatio="none" style="width: 100%; height: 44px; display: block;">
+            <line x1="0" y1="43" x2="300" y2="43" stroke="oklch(0.87 0.012 85)" stroke-width="1"></line>
+            <polyline points="{{stat.pts}}" fill="none" stroke="{{stat.color}}" stroke-width="1.75"></polyline>
+            <line x1="244.5" y1="0" x2="244.5" y2="44" stroke="oklch(0.62 0.03 60)" stroke-width="1" stroke-dasharray="3 3"></line>
+          </svg>
+        </div>
+      </sc-for>
+
+      <div style="display: flex; flex-direction: column; gap: 9px; padding-top: 4px; border-top: 1px solid oklch(0.87 0.012 85);">
+        <span style="font-family: 'IBM Plex Sans', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 0.18em; color: oklch(0.52 0.03 60);">RECENT MOVES</span>
+        <sc-for list="{{moves}}" as="move" hint-placeholder-count="5">
+          <div style="display: flex; align-items: baseline; gap: 12px; font-size: 16px;">
+            <span style="font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; color: oklch(0.52 0.03 60); width: 52px;">day {{move.day}}</span>
+            <span style="flex-grow: 1; color: {{move.tone}};">{{move.name}}</span>
+            <span style="font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; color: oklch(0.52 0.03 60);">{{move.cost}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 24px; padding: 18px 56px 30px; border-top: 2px solid oklch(0.24 0.02 60);">
+    <div style="display: flex; align-items: center; gap: 16px; font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; letter-spacing: 0.1em; color: oklch(0.44 0.03 60);">
+      <span>PREV</span>
+      <span style="color: {{accent}}; font-weight: 600;">PLAY</span>
+      <span>NEXT</span>
+    </div>
+    <div style="flex-grow: 1; position: relative; height: 26px; display: flex; align-items: center;">
+      <div style="height: 1px; width: 100%; background: oklch(0.80 0.015 85);"></div>
+      <sc-for list="{{ticks}}" as="tick" hint-placeholder-count="12">
+        <div style="position: absolute; left: {{tick.x}}; width: 1px; height: 9px; background: oklch(0.62 0.03 60);"></div>
+      </sc-for>
+      <div style="position: absolute; left: 81.5%; display: flex; flex-direction: column; align-items: center; gap: 3px;">
+        <div style="width: 9px; height: 9px; border-radius: 50%; background: {{accent}};"></div>
+      </div>
+    </div>
+    <span style="font-family: 'IBM Plex Sans', sans-serif; font-size: 12px; color: oklch(0.44 0.03 60);">326 / 400</span>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#9c4a2f","options":["#9c4a2f","#2f6b6b","#7a5c2e","#4a4a7a"]}}'>
+const SERIES = [[1,0,0,0],[10,0,0,0],[20,0,0,0],[30,0.1,0,0.1],[40,0.1,0,0.1],[50,0.2,0,0.2],[60,0.3,0,0.4],[70,0.4,0,0.6],[80,0.6,0,0.9],[90,0.8,0,1.2],[100,1.1,0,1.6],[110,1.5,0,2.2],[120,2.1,0,3.0],[130,3.1,0,4.1],[140,4.3,0,5.3],[150,6.1,0,6.8],[160,8.3,0,8.4],[170,11.2,0,10.1],[180,14.5,0,11.8],[190,18.4,0,13.6],[200,23.1,0,15.4],[210,28.7,0,17.3],[220,35.1,0,19.1],[230,42.2,0,20.9],[240,49.7,0,22.8],[250,57.3,0,24.6],[260,64.1,0.7,26.8],[270,69.9,2.1,29.9],[280,74.4,3.9,33.3],[290,77.4,6.3,37.0],[300,79.0,9.1,41.0],[310,78.9,12.6,45.6],[320,77.9,16.3,50.5],[330,75.7,20.5,55.7],[340,72.2,25.2,61.4],[350,68.2,30.1,67.4],[360,64.2,34.8,73.6],[370,60.2,39.2,79.8],[380,56.4,43.3,86.0],[390,52.7,47.1,92.1],[400,49.3,50.6,98.3]];
+const ACTION_DAYS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,23,25,32,160,214,255,256,257,258,260,264,271,277,284,288,290,296,300,307,313,326,337,347,359];
+
+class Component extends DCLogic {
+  poly(i) {
+    return SERIES.filter((r) => r[0] <= 326)
+      .map((r) => `${(r[0] / 400 * 300).toFixed(1)},${(43 - r[i] / 100 * 40).toFixed(1)}`)
+      .join(' ');
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#9c4a2f';
+    return {
+      accent,
+      stats: [
+        { name: 'Infected', value: '76.8%', color: 'oklch(0.55 0.13 40)', pts: this.poly(1) },
+        { name: 'Dead', value: '18.6%', color: 'oklch(0.42 0.13 25)', pts: this.poly(2) },
+        { name: 'Cure', value: '53.5%', color: 'oklch(0.5 0.13 200)', pts: this.poly(3) },
+      ],
+      moves: [
+        { day: '300', name: 'Seizures', cost: '4 DNA', tone: 'oklch(0.44 0.03 60)' },
+        { day: '307', name: 'Pulmonary Oedema', cost: '9 DNA', tone: 'oklch(0.44 0.03 60)' },
+        { day: '313', name: 'Skin Lesions', cost: '5 DNA', tone: 'oklch(0.44 0.03 60)' },
+        { day: '326', name: 'Internal Haemorrhaging', cost: '12 DNA', tone: accent },
+        { day: '337', name: 'Immune Suppression', cost: '12 DNA', tone: 'oklch(0.72 0.02 60)' },
+      ],
+      ticks: ACTION_DAYS.map((d) => ({ x: `${(d / 400 * 100).toFixed(2)}%` })),
+    };
+  }
+}
+</script>
+</body>
+</html>

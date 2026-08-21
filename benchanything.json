@@ -130,6 +130,7 @@
       "action_accepted": "true if the trait was successfully evolved or devolved, false/null otherwise.",
       "action_error": "Present only when the action was rejected: why. The step still advances one day, so a bad action costs a turn rather than stalling the episode.",
       "devolve_options": "Present alongside action_error: the trait IDs a devolve action would currently accept.",
+      "world": "Per-country [infected_pct, dead_pct] to three decimals, in country-name-sorted order. For replay and visualisation only -- info is not part of the observation the agent is prompted with.",
       "score": "Final score object (only present when done=true)."
     }
   },

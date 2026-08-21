@@ -1,0 +1,286 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans", system-ui, sans-serif; }
+    a { color: oklch(0.72 0.14 215); }
+    a:hover { color: oklch(0.82 0.12 215); }
+    .scroll::-webkit-scrollbar { width: 6px; }
+    .scroll::-webkit-scrollbar-track { background: oklch(0.24 0.014 250); }
+    .scroll::-webkit-scrollbar-thumb { background: oklch(0.38 0.015 250); }
+  </style>
+</helmet>
+
+<div style="width: 1280px; height: 880px; background: oklch(0.17 0.012 250); color: oklch(0.93 0.006 250); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; font-feature-settings: 'tnum' 1;">
+
+  <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 24px; padding: 20px 26px 16px; border-bottom: 1px solid oklch(0.31 0.015 250);">
+    <div style="display: flex; align-items: baseline; gap: 14px;">
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.14em; color: oklch(0.66 0.01 250);">PLAGUE SIM</span>
+      <span style="font-size: 19px; font-weight: 600;">[MODEL]</span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: oklch(0.66 0.01 250);">seed USA · episode 1 of 5</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.1em; color: oklch(0.66 0.01 250);">OUTCOME</span>
+      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500; color: oklch(0.17 0.012 250); background: {{accent}}; padding: 4px 10px;">INFECTED_ALL</span>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1.72fr) minmax(0, 1fr); gap: 20px; padding: 18px 26px; min-height: 0;">
+
+    <div style="display: flex; flex-direction: column; gap: 16px; min-height: 0;">
+
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: oklch(0.31 0.015 250); border: 1px solid oklch(0.31 0.015 250);">
+        <div style="background: oklch(0.21 0.014 250); padding: 12px 14px;">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: oklch(0.66 0.01 250);">DAY</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 32px; font-weight: 500; line-height: 1.1;">326</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: oklch(0.66 0.01 250);">of 400</div>
+        </div>
+        <div style="background: oklch(0.21 0.014 250); padding: 12px 14px;">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: oklch(0.74 0.14 65);">INFECTED</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 32px; font-weight: 500; line-height: 1.1;">76.8%</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: oklch(0.66 0.01 250);">5.45B people</div>
+        </div>
+        <div style="background: oklch(0.21 0.014 250); padding: 12px 14px;">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: oklch(0.58 0.14 25);">DEAD</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 32px; font-weight: 500; line-height: 1.1;">18.6%</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: oklch(0.66 0.01 250);">1.32B people</div>
+        </div>
+        <div style="background: oklch(0.21 0.014 250); padding: 12px 14px;">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: oklch(0.72 0.14 215);">CURE</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 32px; font-weight: 500; line-height: 1.1;">53.5%</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: oklch(0.66 0.01 250);">~74 days left</div>
+        </div>
+      </div>
+
+      <div style="border: 1px solid oklch(0.31 0.015 250); background: oklch(0.21 0.014 250); display: grid; grid-template-columns: minmax(0, 1fr) 348px; flex-grow: 1; min-height: 0;">
+
+        <div style="padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px; min-height: 0;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: oklch(0.66 0.01 250);">THE RACE</span>
+            <div style="display: flex; gap: 12px; font-family: 'IBM Plex Mono', monospace; font-size: 11px;">
+              <span style="color: oklch(0.74 0.14 65);">■ infected</span>
+              <span style="color: oklch(0.58 0.14 25);">■ dead</span>
+              <span style="color: oklch(0.72 0.14 215);">■ cure</span>
+            </div>
+          </div>
+          <svg viewBox="0 0 400 300" preserveAspectRatio="none" style="width: 100%; flex-grow: 1; min-height: 0; display: block;">
+            <line x1="0" y1="75" x2="400" y2="75" stroke="oklch(0.28 0.014 250)" stroke-width="1"></line>
+            <line x1="0" y1="150" x2="400" y2="150" stroke="oklch(0.28 0.014 250)" stroke-width="1"></line>
+            <line x1="0" y1="225" x2="400" y2="225" stroke="oklch(0.28 0.014 250)" stroke-width="1"></line>
+            <polyline points="{{curePts}}" fill="none" stroke="oklch(0.72 0.14 215)" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"></polyline>
+            <polyline points="{{deadPts}}" fill="none" stroke="oklch(0.58 0.14 25)" stroke-width="2.5" vector-effect="non-scaling-stroke"></polyline>
+            <polyline points="{{infPts}}" fill="none" stroke="oklch(0.74 0.14 65)" stroke-width="2.5" vector-effect="non-scaling-stroke"></polyline>
+            <line x1="{{headX}}" y1="0" x2="{{headX}}" y2="300" stroke="oklch(0.93 0.006 250)" stroke-width="1.5" vector-effect="non-scaling-stroke"></line>
+          </svg>
+          <div style="display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.66 0.01 250);">
+            <span>day 1</span>
+            <span>quiet until day 160</span>
+            <span>day 400</span>
+          </div>
+        </div>
+
+        <div style="border-left: 1px solid oklch(0.31 0.015 250); padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 12px; min-height: 0;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between;">
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: oklch(0.66 0.01 250);">WORLD</span>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: oklch(0.78 0.008 250);">71 / 71 infected</span>
+          </div>
+
+          <div style="display: flex; flex-wrap: wrap; gap: 14px 10px; align-items: flex-start;">
+            <sc-for list="{{regions}}" as="reg" hint-placeholder-count="6">
+              <div style="width: {{reg.width}}; display: flex; flex-direction: column; gap: 5px;">
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 0.08em; color: oklch(0.58 0.012 250); white-space: nowrap;">{{reg.label}}</span>
+                <div style="display: flex; flex-wrap: wrap; gap: 3px;">
+                  <sc-for list="{{reg.tiles}}" as="tile" hint-placeholder-count="8">
+                    <div title="{{tile.name}}" style="width: 20px; height: 20px; background: {{tile.fill}}; outline: {{tile.ring}}; outline-offset: -1px;"></div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="margin-top: auto; display: flex; flex-direction: column; gap: 7px;">
+            <div style="height: 8px; background: linear-gradient(to right, oklch(0.3 0.03 65), oklch(0.52 0.09 60), oklch(0.7 0.14 52), oklch(0.68 0.15 34));"></div>
+            <div style="display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: oklch(0.62 0.01 250);">
+              <span>untouched</span>
+              <span>infected</span>
+              <span>dying</span>
+            </div>
+            <p style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 10px; line-height: 1.5; color: oklch(0.58 0.012 250);">Australia and the arid belt lag — Heat&nbsp;Resistance&nbsp;2 came late, on day&nbsp;214.</p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 16px; min-height: 0;">
+
+      <div style="border: 1px solid oklch(0.31 0.015 250); background: oklch(0.21 0.014 250); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0;">
+        <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: oklch(0.66 0.01 250);">REASONING · TURN 326</div>
+        <p style="margin: 0; font-size: 14px; line-height: 1.62; color: oklch(0.88 0.008 250); text-wrap: pretty;">Cure is at 53% and climbing about six tenths of a point a day, so I have roughly seventy days of runway left. Infection has plateaued near 77% — more transmission buys me very little now. What is left is converting reach into deaths before the research lands.</p>
+        <p style="margin: 0; font-size: 14px; line-height: 1.62; color: oklch(0.88 0.008 250); text-wrap: pretty;">Internal Haemorrhaging is the best severity-per-DNA I can afford at 12, and I am holding Air 2 back for the final stretch.</p>
+      </div>
+
+      <div style="border: 1px solid oklch(0.31 0.015 250); background: oklch(0.21 0.014 250); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0;">
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: oklch(0.66 0.01 250);">ACTION</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 500; color: {{accent}};">InternalHaemorrhaging</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: oklch(0.66 0.01 250);">symptom tree · accepted</span>
+        </div>
+        <div style="text-align: right;">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: oklch(0.66 0.01 250);">COST</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 24px; font-weight: 500;">12</div>
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: oklch(0.66 0.01 250);">1 DNA left</div>
+        </div>
+      </div>
+
+      <div style="border: 1px solid oklch(0.31 0.015 250); background: oklch(0.21 0.014 250); padding: 14px 0 0; display: flex; flex-direction: column; gap: 10px; flex-grow: 1; min-height: 0;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 0 16px;">
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.12em; color: oklch(0.66 0.01 250);">PURCHASE HISTORY</span>
+          <span style="font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: oklch(0.78 0.008 250);">38 / 60</span>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 5px; padding: 0 16px;">
+          <sc-for list="{{trees}}" as="row" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: oklch(0.62 0.01 250); width: 78px;">{{row.name}}</span>
+              <div style="flex-grow: 1; height: 4px; background: oklch(0.28 0.014 250);">
+                <div style="height: 4px; width: {{row.pct}}; background: {{row.color}};"></div>
+              </div>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: oklch(0.72 0.01 250); width: 38px; text-align: right;">{{row.label}}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div class="scroll" style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 16px; mask-image: linear-gradient(to bottom, black 0%, black 72%, transparent 100%); -webkit-mask-image: linear-gradient(to bottom, black 0%, black 72%, transparent 100%);">
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <sc-for list="{{buys}}" as="buy" hint-placeholder-count="10">
+              <div style="display: flex; align-items: baseline; gap: 10px; padding: 5px 8px; background: {{buy.bg}}; border-left: 2px solid {{buy.tone}};">
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.6 0.01 250); width: 46px;">d{{buy.day}}</span>
+                <span style="flex-grow: 1; font-size: 13px; color: {{buy.text}};">{{buy.name}}</span>
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: oklch(0.66 0.01 250);">{{buy.cost}}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 18px; padding: 14px 26px 18px; border-top: 1px solid oklch(0.31 0.015 250);">
+    <div style="display: flex; gap: 8px;">
+      <div style="width: 32px; height: 32px; border: 1px solid oklch(0.42 0.015 250); display: flex; align-items: center; justify-content: center;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="oklch(0.93 0.006 250)" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </div>
+      <div style="width: 32px; height: 32px; background: {{accent}}; display: flex; align-items: center; justify-content: center;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="oklch(0.17 0.012 250)" stroke="none"><polygon points="6 4 20 12 6 20"></polygon></svg>
+      </div>
+      <div style="width: 32px; height: 32px; border: 1px solid oklch(0.42 0.015 250); display: flex; align-items: center; justify-content: center;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="oklch(0.93 0.006 250)" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </div>
+    </div>
+    <div style="flex-grow: 1; position: relative; height: 32px; display: flex; align-items: center;">
+      <div style="height: 3px; width: 100%; background: oklch(0.31 0.015 250);"></div>
+      <div style="position: absolute; left: 0; height: 3px; width: 81.5%; background: oklch(0.74 0.14 65);"></div>
+      <sc-for list="{{ticks}}" as="tick" hint-placeholder-count="12">
+        <div style="position: absolute; left: {{tick.x}}; width: 1px; height: 11px; background: oklch(0.52 0.015 250);"></div>
+      </sc-for>
+      <div style="position: absolute; left: 81.5%; width: 3px; height: 22px; background: oklch(0.93 0.006 250);"></div>
+    </div>
+    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: oklch(0.66 0.01 250);">326 / 400 · 41 actions</span>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#e8a33d","options":["#e8a33d","#5cc8d8","#d2604f","#9bd45c"]}}'>
+const SERIES = [[1,0,0,0],[10,0,0,0],[20,0,0,0],[30,0.1,0,0.1],[40,0.1,0,0.1],[50,0.2,0,0.2],[60,0.3,0,0.4],[70,0.4,0,0.6],[80,0.6,0,0.9],[90,0.8,0,1.2],[100,1.1,0,1.6],[110,1.5,0,2.2],[120,2.1,0,3.0],[130,3.1,0,4.1],[140,4.3,0,5.3],[150,6.1,0,6.8],[160,8.3,0,8.4],[170,11.2,0,10.1],[180,14.5,0,11.8],[190,18.4,0,13.6],[200,23.1,0,15.4],[210,28.7,0,17.3],[220,35.1,0,19.1],[230,42.2,0,20.9],[240,49.7,0,22.8],[250,57.3,0,24.6],[260,64.1,0.7,26.8],[270,69.9,2.1,29.9],[280,74.4,3.9,33.3],[290,77.4,6.3,37.0],[300,79.0,9.1,41.0],[310,78.9,12.6,45.6],[320,77.9,16.3,50.5],[330,75.7,20.5,55.7],[340,72.2,25.2,61.4],[350,68.2,30.1,67.4],[360,64.2,34.8,73.6],[370,60.2,39.2,79.8],[380,56.4,43.3,86.0],[390,52.7,47.1,92.1],[400,49.3,50.6,98.3]];
+
+const ACTION_DAYS = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,23,25,32,160,214,255,256,257,258,260,264,271,277,284,288,290,296,300,307,313,326,337,347,359];
+
+// Real per-country state at day 326 of the reference episode: [name, infected, dead]
+const WORLD = [
+  ["N. AMERICA", "66px", [["Greenland",0.823,0.177],["Canada",0.876,0.124],["USA",0.885,0.112],["Mexico",0.783,0.185],["Central America",0.756,0.244],["Caribbean",0.773,0.22]]],
+  ["EUROPE", "135px", [["Iceland",0.877,0.123],["UK",0.797,0.089],["Ireland",0.855,0.126],["Norway",0.892,0.108],["Sweden",0.864,0.114],["Finland",0.868,0.132],["Denmark",0.88,0.12],["Germany",0.838,0.102],["Netherlands",0.864,0.112],["Belgium",0.871,0.127],["France",0.836,0.114],["Spain",0.721,0.094],["Portugal",0.818,0.147],["Italy",0.831,0.125],["Switzerland",0.892,0.108],["Austria",0.872,0.128],["Czech Republic",0.843,0.142],["Slovakia",0.831,0.169],["Poland",0.822,0.146],["Baltic States",0.838,0.162],["Hungary",0.825,0.166],["Romania",0.794,0.176],["Moldova",0.764,0.236],["Bulgaria",0.813,0.187],["Balkans",0.792,0.19],["Greece",0.819,0.161],["Ukraine",0.764,0.198],["Belarus",0.794,0.206],["Russia",0.787,0.163]]],
+  ["MIDDLE EAST", "89px", [["Turkey",0.681,0.107],["Caucasus",0.783,0.217],["Middle East",0.676,0.105],["Saudi Arabia",0.726,0.095],["Yemen",0.667,0.172],["Iran",0.691,0.134],["C. Asia",0.716,0.182],["Kazakhstan",0.797,0.203]]],
+  ["S. AMERICA", "66px", [["Colombia",0.778,0.222],["Venezuela",0.765,0.235],["Brazil",0.783,0.208],["Peru",0.73,0.176],["Bolivia",0.77,0.217],["Argentina",0.776,0.194],["Chile",0.734,0.145]]],
+  ["AFRICA", "135px", [["Morocco",0.729,0.161],["Algeria",0.727,0.16],["Libya",0.775,0.225],["Egypt",0.652,0.121],["Sudan",0.71,0.196],["W. Africa",0.738,0.243],["C. Africa",0.733,0.257],["E. Africa",0.747,0.24],["S. Africa",0.714,0.136],["Madagascar",0.736,0.258]]],
+  ["ASIA / OCEANIA", "89px", [["Pakistan",0.695,0.161],["India",0.762,0.205],["China",0.78,0.192],["Mongolia",0.753,0.247],["South Korea",0.864,0.131],["Japan",0.831,0.1],["SE Asia",0.774,0.226],["Philippines",0.755,0.234],["Indonesia",0.764,0.221],["Australia",0.556,0.046],["New Zealand",0.854,0.125]]],
+];
+
+// day, trait, cost, tree — newest first
+const BUYS = [
+  [326,"Internal Haemorrhaging",12,"s"],[313,"Skin Lesions",8,"s"],[307,"Pulmonary Oedema",7,"s"],
+  [300,"Seizures",4,"s"],[296,"Inflammation",5,"s"],[290,"Sweating",3,"s"],[288,"Hyper Sensitivity",2,"s"],
+  [284,"Fever",9,"s"],[277,"Diarrhoea",6,"s"],[271,"Pulmonary Fibrosis",6,"s"],[264,"Paranoia",4,"s"],
+  [260,"Haemophilia",3,"s"],[258,"Abscesses",2,"s"],[257,"Insomnia",2,"s"],[256,"Systemic Infection",17,"s"],
+  [255,"Tumours",11,"s"],[214,"Heat Resistance 2",22,"a"],[160,"Bird 1",12,"t"],[32,"Livestock 2",12,"t"],
+  [25,"Drug Resistance 1",11,"a"],[23,"Rodent 1",10,"t"],[17,"Anaemia",2,"s"],[16,"Vomiting",3,"s"],
+  [15,"Nausea",2,"s"],[14,"Rash",3,"s"],[13,"Pneumonia",3,"s"],[12,"Sneezing",5,"s"],[11,"Coughing",4,"s"],
+  [10,"Insect 1",9,"t"],[9,"Air 1",9,"t"],[8,"Water 1",9,"t"],[7,"Cysts",2,"s"],[6,"Blood 1",8,"t"],
+  [5,"Genetic Hardening 1",7,"a"],[4,"Livestock 1",7,"t"],[3,"Cold Resistance 2",12,"a"],
+  [2,"Heat Resistance 1",11,"a"],[1,"Cold Resistance 1",7,"a"],
+];
+
+const TREE_TONE = { s: 'oklch(0.58 0.14 25)', t: 'oklch(0.74 0.14 65)', a: 'oklch(0.72 0.14 215)' };
+
+class Component extends DCLogic {
+  poly(i) {
+    return SERIES.map((r) => `${(r[0] / 400 * 400).toFixed(1)},${(300 - r[i] / 100 * 300).toFixed(1)}`).join(' ');
+  }
+  // Brightness carries how much of a country is affected; hue swings from amber
+  // toward crimson as more of the affected have died.
+  tint(infected, dead) {
+    const affected = Math.min(1, infected + dead);
+    const share = affected > 0 ? dead / affected : 0;
+    const toward = Math.min(1, share * 3);
+    const light = (0.28 + 0.44 * affected).toFixed(3);
+    const chroma = (0.025 + 0.125 * affected).toFixed(3);
+    const hue = (65 - 32 * toward).toFixed(1);
+    return `oklch(${light} ${chroma} ${hue})`;
+  }
+  renderVals() {
+    const accent = this.props.accent ?? '#e8a33d';
+    return {
+      accent,
+      infPts: this.poly(1),
+      deadPts: this.poly(2),
+      curePts: this.poly(3),
+      headX: (326 / 400 * 400).toFixed(1),
+      ticks: ACTION_DAYS.map((d) => ({ x: `${(d / 400 * 100).toFixed(2)}%` })),
+      regions: WORLD.map(([label, width, tiles]) => ({
+        label,
+        width,
+        tiles: tiles.map(([name, inf, dead]) => ({
+          name: `${name} — ${Math.round((inf + dead) * 100)}% affected`,
+          fill: this.tint(inf, dead),
+          ring: inf + dead < 0.7 ? '1px solid oklch(0.75 0.12 215)' : 'none',
+        })),
+      })),
+      trees: [
+        { name: 'symptom', label: '24/32', pct: '75%', color: 'oklch(0.58 0.14 25)' },
+        { name: 'transmission', label: '8/17', pct: '47%', color: 'oklch(0.74 0.14 65)' },
+        { name: 'ability', label: '6/11', pct: '55%', color: 'oklch(0.72 0.14 215)' },
+      ],
+      buys: BUYS.map(([day, name, cost, tree], i) => ({
+        day,
+        name,
+        cost: `${cost} DNA`,
+        tone: TREE_TONE[tree],
+        bg: i === 0 ? 'oklch(0.26 0.02 250)' : 'transparent',
+        text: i === 0 ? accent : 'oklch(0.86 0.008 250)',
+      })),
+    };
+  }
+}
+</script>
+</body>
+</html>

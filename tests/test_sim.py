@@ -430,6 +430,43 @@ def test_timeout_does_not_override_a_real_outcome():
     assert info["outcome"] == "cured"
 
 
+def test_world_snapshot_rides_in_info_not_the_observation():
+    """
+    The showcase map needs per-country state; the agent must not pay for it.
+    The harness prompts from the observation alone but exports `info`, so this
+    belongs in `info` and must stay out of the observation.
+    """
+    env = PlagueEnv()
+    obs = env.reset("India")
+    assert "world" not in obs
+
+    obs, _, _, info = env.step(None)
+    assert "world" not in obs
+    assert len(info["world"]) == len(env.game.countries)
+    assert all(len(entry) == 2 for entry in info["world"])
+
+
+def test_world_snapshot_is_in_country_name_order():
+    """The order is the contract -- the showcase carries its own name roster."""
+    env = PlagueEnv()
+    env.reset("India")
+    _, _, _, info = env.step(None)
+
+    expected = [
+        round(env.game.countries[name].infected / env.game.countries[name].population * 100, 3)
+        for name in sorted(env.game.countries)
+    ]
+    assert [entry[0] for entry in info["world"]] == expected
+
+
+def test_world_snapshot_tracks_the_seeded_country():
+    env = PlagueEnv()
+    env.reset("India")
+    _, _, _, info = env.step(None)
+    index = sorted(env.game.countries).index("India")
+    assert info["world"][index][0] > 0, "the seeded country must show infection"
+
+
 def test_render_before_reset_is_safe():
     assert "not initialized" in PlagueEnv().render().lower()
 

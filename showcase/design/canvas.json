@@ -1,0 +1,54 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "Replay UI" },
+    { "id": "page-2", "name": "Directions not taken" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Replay UI · situation room", "page": "page-1", "x": 0, "y": 0, "w": 1280, "h": 880 },
+    { "file": "Editorial.dc.html", "title": "Option B · Editorial case study", "page": "page-2", "x": 0, "y": 0, "w": 1280, "h": 880 },
+    { "file": "Broadcast.dc.html", "title": "Option C · Broadcast replay", "page": "page-2", "x": 1400, "y": 0, "w": 1280, "h": 880 }
+  ],
+  "annotations": [
+    {
+      "id": "about-the-data",
+      "page": "page-1",
+      "x": 0,
+      "y": -320,
+      "w": 880,
+      "text": "One real episode: seed USA, 400 days, ended infected_all.\nPaused at day 326 — 76.8% infected, 18.6% dead, cure at 53.5%, DNA down to 1, 38 of 60 traits.\nThe curves, the map, the scrubber ticks and every row of the purchase history are real data\nfrom the reference expert policy.\n\nTwo stand-ins: [MODEL] fills in once a real Mesocosm run exists, and the reasoning paragraph\nis sample prose — no model has played this yet."
+    },
+    {
+      "id": "map-encoding",
+      "page": "page-1",
+      "x": 940,
+      "y": -320,
+      "w": 480,
+      "text": "MAP\nBrightness = how much of a country is affected.\nHue swings amber → crimson as more of the\naffected have died.\nA blue outline marks a country still under 70%\naffected — at this frame that is Australia and\nthe arid belt, which the plague could not reach\nuntil Heat Resistance 2 on day 214.\n\nCaveat: the agent's observation carries no\nper-country data. Driving this map from a real\nmodel run needs that state added to the replay —\nsee the note in the chat."
+    },
+    {
+      "id": "history-note",
+      "page": "page-1",
+      "x": 1460,
+      "y": -320,
+      "w": 420,
+      "text": "PURCHASE HISTORY\nNewest at the top, fading out at the bottom edge,\nscrolls back through all 38 buys.\n\nThe shape of the list is the strategy: 20 traits\nin the first 32 days, one at 160, one at 214,\nthen everything else after day 255."
+    },
+    {
+      "id": "option-b-note",
+      "page": "page-2",
+      "x": 0,
+      "y": -150,
+      "w": 620,
+      "text": "B · EDITORIAL CASE STUDY — not taken.\nThe model's thinking set as the headline; numbers demoted\nto a margin rail.\nTradeoff: the sim itself recedes — no strong sense of a\nrace against the cure."
+    },
+    {
+      "id": "option-c-note",
+      "page": "page-2",
+      "x": 1400,
+      "y": -150,
+      "w": 620,
+      "text": "C · BROADCAST REPLAY — not taken.\nScoreboard framing, video-player transport, commentary card.\nTradeoff: the loudest of the three, and the one most likely\nto feel like style over substance if a run is uneventful."
+    }
+  ],
+  "launch": { "view": "canvas", "page": "page-1" }
+}

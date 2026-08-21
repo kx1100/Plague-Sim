@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plague Sim — benchmark replay</title>
+
+<!-- Webfonts are the one optional network call: offline, the fallback stacks
+     render and nothing else changes. No scripts, styles or data are fetched
+     from anywhere. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+  :root {
+    --bg: oklch(0.17 0.012 250);
+    --panel: oklch(0.21 0.014 250);
+    --panel-2: oklch(0.26 0.02 250);
+    --line: oklch(0.31 0.015 250);
+    --line-2: oklch(0.28 0.014 250);
+    --ink: oklch(0.93 0.006 250);
+    --ink-2: oklch(0.86 0.008 250);
+    --mute: oklch(0.66 0.01 250);
+    --mute-2: oklch(0.58 0.012 250);
+    --infected: oklch(0.74 0.14 65);
+    --dead: oklch(0.58 0.14 25);
+    --cure: oklch(0.72 0.14 215);
+    --accent: var(--infected);
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: "IBM Plex Sans", system-ui, -apple-system, Segoe UI, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-feature-settings: 'tnum' 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; }
+
+  /* ── header ─────────────────────────────────────────────────────────── */
+  .head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 24px; padding: 18px 26px 14px; border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .kicker { font-family: var(--mono); font-size: 12px; letter-spacing: .14em; color: var(--mute); }
+  .model { font-size: 19px; font-weight: 600; }
+  .runmeta { font-family: var(--mono); font-size: 13px; color: var(--mute); }
+  .outcome { display: flex; align-items: center; gap: 10px; }
+  .badge {
+    font-family: var(--mono); font-size: 13px; font-weight: 500;
+    color: var(--bg); background: var(--accent); padding: 4px 10px;
+  }
+  .badge[data-outcome="cured"], .badge[data-outcome="died_out"] { background: var(--cure); }
+  .badge[data-outcome="timeout"] { background: var(--mute); }
+
+  .notice {
+    padding: 9px 26px; border-bottom: 1px solid var(--line);
+    background: oklch(0.23 0.02 250);
+    font-size: 13px; color: var(--ink-2); line-height: 1.5;
+  }
+  .notice b { color: var(--accent); font-weight: 600; }
+  .notice[hidden] { display: none; }
+
+  /* ── layout ─────────────────────────────────────────────────────────── */
+  .body {
+    display: grid; grid-template-columns: minmax(0, 1.72fr) minmax(0, 1fr);
+    gap: 20px; padding: 18px 26px; min-height: 0;
+  }
+  .col { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+
+  .tiles {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px; background: var(--line); border: 1px solid var(--line);
+  }
+  .tile { background: var(--panel); padding: 12px 14px; }
+  .tile-label { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--mute); }
+  .tile-value { font-family: var(--mono); font-size: 32px; font-weight: 500; line-height: 1.1; }
+  .tile-sub { font-family: var(--mono); font-size: 12px; color: var(--mute); }
+
+  .split {
+    border: 1px solid var(--line); background: var(--panel);
+    display: grid; grid-template-columns: minmax(0, 1fr) 348px;
+    flex-grow: 1; min-height: 0;
+  }
+  .pane { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+  .pane + .pane { border-left: 1px solid var(--line); }
+  .pane-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .legend { display: flex; gap: 12px; font-family: var(--mono); font-size: 11px; }
+  .sw-inf { color: var(--infected); } .sw-dead { color: var(--dead); } .sw-cure { color: var(--cure); }
+
+  #chart { width: 100%; flex-grow: 1; min-height: 0; display: block; cursor: pointer; }
+  .axis { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--mute); }
+
+  .map { display: flex; flex-wrap: wrap; gap: 14px 10px; align-items: flex-start; }
+  .region { display: flex; flex-direction: column; gap: 5px; }
+  .region-label { font-family: var(--mono); font-size: 9px; letter-spacing: .08em; color: var(--mute-2); white-space: nowrap; }
+  .tiles-grid { display: flex; flex-wrap: wrap; gap: 3px; }
+  .country { width: 20px; height: 20px; background: var(--line-2); outline-offset: -1px; }
+  .ramp { height: 8px; background: linear-gradient(to right, oklch(.3 .03 65), oklch(.52 .09 60), oklch(.7 .14 52), oklch(.68 .15 34)); }
+  .ramp-labels { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: oklch(.62 .01 250); }
+  .map-foot { margin-top: auto; display: flex; flex-direction: column; gap: 7px; }
+  .map-note { margin: 0; font-family: var(--mono); font-size: 10px; line-height: 1.5; color: var(--mute-2); }
+
+  .card { border: 1px solid var(--line); background: var(--panel); }
+  .card-pad { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .card-label { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--mute); }
+  #reasoning { margin: 0; font-size: 14px; line-height: 1.62; color: var(--ink-2); text-wrap: pretty; }
+  #reasoning.empty { color: var(--mute); font-style: italic; }
+
+  .action-row { padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .action-name { font-family: var(--mono); font-size: 16px; font-weight: 500; color: var(--accent); }
+  .action-name.pass { color: var(--mute); }
+  .action-sub { font-family: var(--mono); font-size: 12px; color: var(--mute); }
+  .action-cost { text-align: right; }
+  .cost-value { font-family: var(--mono); font-size: 24px; font-weight: 500; }
+
+  .history { display: flex; flex-direction: column; gap: 10px; flex-grow: 1; min-height: 0; padding: 14px 0 0; }
+  .history-head, .trees { padding: 0 16px; }
+  .history-head { display: flex; align-items: baseline; justify-content: space-between; }
+  .trees { display: flex; flex-direction: column; gap: 5px; }
+  .tree { display: flex; align-items: center; gap: 8px; }
+  .tree-name { font-family: var(--mono); font-size: 10px; color: oklch(.62 .01 250); width: 78px; }
+  .tree-track { flex-grow: 1; height: 4px; background: var(--line-2); }
+  .tree-fill { height: 4px; }
+  .tree-count { font-family: var(--mono); font-size: 10px; color: oklch(.72 .01 250); width: 38px; text-align: right; }
+
+  .scroll {
+    flex-grow: 1; min-height: 0; overflow-y: auto; padding: 4px 16px 16px;
+    mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 72%, transparent 100%);
+    scrollbar-width: thin; scrollbar-color: oklch(.38 .015 250) var(--panel);
+  }
+  .scroll::-webkit-scrollbar { width: 6px; }
+  .scroll::-webkit-scrollbar-track { background: oklch(.24 .014 250); }
+  .scroll::-webkit-scrollbar-thumb { background: oklch(.38 .015 250); }
+  .buys { display: flex; flex-direction: column; gap: 2px; }
+  .buy { display: flex; align-items: baseline; gap: 10px; padding: 5px 8px; border-left: 2px solid var(--line); }
+  .buy.latest { background: var(--panel-2); }
+  .buy-day { font-family: var(--mono); font-size: 11px; color: oklch(.6 .01 250); width: 46px; }
+  .buy-name { flex-grow: 1; font-size: 13px; color: var(--ink-2); }
+  .buy.latest .buy-name { color: var(--accent); }
+  .buy-cost { font-family: var(--mono); font-size: 11px; color: var(--mute); }
+  .buys-empty { font-family: var(--mono); font-size: 12px; color: var(--mute); padding: 6px 8px; }
+
+  /* ── transport ──────────────────────────────────────────────────────── */
+  .transport {
+    display: flex; align-items: center; gap: 18px;
+    padding: 14px 26px 18px; border-top: 1px solid var(--line);
+  }
+  .buttons { display: flex; gap: 8px; }
+  .btn {
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    background: none; border: 1px solid oklch(.42 .015 250); color: var(--ink);
+    padding: 0; cursor: pointer;
+  }
+  .btn:hover { border-color: var(--ink); }
+  .btn:focus-visible { outline: 2px solid var(--cure); outline-offset: 2px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+  .track { flex-grow: 1; position: relative; height: 32px; display: flex; align-items: center; }
+  .track-bg { height: 3px; width: 100%; background: var(--line); }
+  .track-fill { position: absolute; left: 0; height: 3px; background: var(--infected); }
+  .tick { position: absolute; width: 1px; height: 11px; background: oklch(.52 .015 250); pointer-events: none; }
+  #scrub {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    margin: 0; opacity: 0; cursor: pointer;
+  }
+  .playhead { position: absolute; width: 3px; height: 22px; background: var(--ink); pointer-events: none; }
+  .counter { font-family: var(--mono); font-size: 13px; color: var(--mute); white-space: nowrap; }
+
+  @media (max-width: 1100px) {
+    .body { grid-template-columns: minmax(0, 1fr); }
+    .split { grid-template-columns: minmax(0, 1fr); }
+    .pane + .pane { border-left: none; border-top: 1px solid var(--line); }
+    .app { height: auto; }
+    #chart { height: 240px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="head">
+    <div class="brand">
+      <span class="kicker">PLAGUE SIM</span>
+      <span class="model" id="model">—</span>
+      <span class="runmeta" id="runmeta"></span>
+    </div>
+    <div class="outcome">
+      <span class="kicker">OUTCOME</span>
+      <span class="badge" id="outcome">—</span>
+    </div>
+  </header>
+
+  <div class="notice" id="notice" hidden></div>
+
+  <div class="body">
+    <div class="col">
+      <div class="tiles">
+        <div class="tile">
+          <div class="tile-label">DAY</div>
+          <div class="tile-value" id="v-day">—</div>
+          <div class="tile-sub" id="s-day"></div>
+        </div>
+        <div class="tile">
+          <div class="tile-label" style="color: var(--infected)">INFECTED</div>
+          <div class="tile-value" id="v-inf">—</div>
+          <div class="tile-sub" id="s-inf"></div>
+        </div>
+        <div class="tile">
+          <div class="tile-label" style="color: var(--dead)">DEAD</div>
+          <div class="tile-value" id="v-dead">—</div>
+          <div class="tile-sub" id="s-dead"></div>
+        </div>
+        <div class="tile">
+          <div class="tile-label" style="color: var(--cure)">CURE</div>
+          <div class="tile-value" id="v-cure">—</div>
+          <div class="tile-sub" id="s-cure"></div>
+        </div>
+      </div>
+
+      <div class="split">
+        <section class="pane">
+          <div class="pane-head">
+            <span class="card-label">THE RACE</span>
+            <div class="legend">
+              <span class="sw-inf">■ infected</span>
+              <span class="sw-dead">■ dead</span>
+              <span class="sw-cure">■ cure</span>
+            </div>
+          </div>
+          <svg id="chart" viewBox="0 0 400 300" preserveAspectRatio="none" role="img" aria-label="Infected, dead and cure progress over the episode">
+            <line x1="0" y1="75" x2="400" y2="75" stroke="var(--line-2)" stroke-width="1"/>
+            <line x1="0" y1="150" x2="400" y2="150" stroke="var(--line-2)" stroke-width="1"/>
+            <line x1="0" y1="225" x2="400" y2="225" stroke="var(--line-2)" stroke-width="1"/>
+            <polyline id="p-cure" fill="none" stroke="var(--cure)" stroke-width="2" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>
+            <polyline id="p-dead" fill="none" stroke="var(--dead)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+            <polyline id="p-inf" fill="none" stroke="var(--infected)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>
+            <line id="p-head" y1="0" y2="300" stroke="var(--ink)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+          </svg>
+          <div class="axis">
+            <span>day 1</span>
+            <span id="chart-note"></span>
+            <span id="chart-end"></span>
+          </div>
+        </section>
+
+        <section class="pane">
+          <div class="pane-head">
+            <span class="card-label">WORLD</span>
+            <span class="tile-sub" id="v-countries"></span>
+          </div>
+          <div class="map" id="map"></div>
+          <div class="map-foot">
+            <div class="ramp"></div>
+            <div class="ramp-labels">
+              <span>untouched</span><span>infected</span><span>dying</span>
+            </div>
+            <p class="map-note">Brightness is how much of a country is affected; hue turns from amber to crimson as more of the affected die. A blue outline marks a country still under 70% affected.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="col">
+      <section class="card card-pad">
+        <div class="card-label" id="reasoning-label">REASONING</div>
+        <p id="reasoning">—</p>
+      </section>
+
+      <section class="card action-row">
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <span class="card-label">ACTION</span>
+          <span class="action-name" id="action-name">—</span>
+          <span class="action-sub" id="action-sub"></span>
+        </div>
+        <div class="action-cost">
+          <div class="card-label">COST</div>
+          <div class="cost-value" id="action-cost">—</div>
+          <div class="action-sub" id="dna-left"></div>
+        </div>
+      </section>
+
+      <section class="card history">
+        <div class="history-head">
+          <span class="card-label">PURCHASE HISTORY</span>
+          <span class="tile-sub" id="trait-count"></span>
+        </div>
+        <div class="trees" id="trees"></div>
+        <div class="scroll"><div class="buys" id="buys"></div></div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="transport">
+    <div class="buttons">
+      <button class="btn" id="prev" title="Previous turn (←)" aria-label="Previous turn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <button class="btn primary" id="play" title="Play / pause (space)" aria-label="Play or pause">
+        <svg id="icon-play" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>
+        <svg id="icon-pause" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" hidden><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
+      </button>
+      <button class="btn" id="next" title="Next turn (→)" aria-label="Next turn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+    </div>
+    <div class="track" id="track">
+      <div class="track-bg"></div>
+      <div class="track-fill" id="track-fill"></div>
+      <div class="playhead" id="playhead"></div>
+      <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Scrub through the episode">
+    </div>
+    <span class="counter" id="counter">—</span>
+  </footer>
+</div>
+
+<script src="traits.js"></script>
+<script src="world.js"></script>
+<script src="replay.example.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // ── trait table ─────────────────────────────────────────────────────────
+  // The replay names trait ids only, so display name, DNA cost and tree come
+  // from traits.js. Inferring cost from the DNA balance between turns would be
+  // wrong -- income lands in the same step -- and the tree is not derivable
+  // from an id at all.
+  var TRAITS = window.PLAGUE_TRAITS || {};
+  var TREE_COLOR = { symptom: "var(--dead)", transmission: "var(--infected)", ability: "var(--cure)" };
+  var TREE_TOTALS = { symptom: 0, transmission: 0, ability: 0 };
+  Object.keys(TRAITS).forEach(function (id) {
+    var tree = TRAITS[id][2];
+    if (TREE_TOTALS[tree] != null) TREE_TOTALS[tree]++;
+  });
+
+  // ── data loading ────────────────────────────────────────────────────────
+  // A real exported run lives at data/replay.json. It is fetched when the page
+  // is served over http; from file:// the fetch is blocked by the browser, so
+  // the bundled sample (a <script src>, which is not blocked) is used instead.
+  function loadReal() {
+    if (location.protocol === "file:") return Promise.resolve(null);
+    return fetch("data/replay.json")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
+  }
+
+  function pickEpisode(doc) {
+    var episodes = doc && doc.replay ? Object.keys(doc.replay) : [];
+    for (var i = 0; i < episodes.length; i++) {
+      var turns = doc.replay[episodes[i]];
+      if (turns && turns.length) return { id: episodes[i], turns: turns };
+    }
+    return null;
+  }
+
+  // Normalise one exported turn into a frame the UI can render directly.
+  // `board_after` is the board once the day has run, which is the state the
+  // map in `info.world` describes; `observation` (the pre-action board) is the
+  // fallback for exports that carry only that.
+  function toFrames(turns) {
+    var frames = [], lastWorld = null, spent = 0;
+    for (var i = 0; i < turns.length; i++) {
+      var t = turns[i] || {};
+      var board = t.board_after || t.observation || t.board_before || {};
+      var info = t.info || {};
+      if (info.world) lastWorld = info.world;
+      var accepted = t.action != null && info.action_accepted !== false;
+      var trait = traitOf(t.action);
+      if (accepted && trait && !trait.devolve) spent += trait.cost;
+      frames.push({
+        step: t.step != null ? t.step : i + 1,
+        day: board.day != null ? board.day : info.day,
+        dna: board.dna != null ? board.dna : info.dna,
+        cure: (board.cure_progress != null ? board.cure_progress : info.cure_progress) || 0,
+        inf: board.infected_pct || 0,
+        dead: board.dead_pct || 0,
+        victory: board.victory_progress,
+        countries: board.countries_infected,
+        evolved: board.evolved_traits || [],
+        action: t.action || null,
+        accepted: accepted,
+        trait: trait,
+        reasoning: (t.reasoning || "").trim(),
+        world: lastWorld,
+        outcome: info.outcome || null,
+        end: t.episode_end || null,
+        spent: spent
+      });
+    }
+    return frames;
+  }
+
+  // A trait id, resolved against traits.js. An unknown id (a model inventing
+  // one, or a table that has drifted) still renders, with the id as its name.
+  function traitOf(id) {
+    if (!id || typeof id !== "string") return null;
+    var devolve = id.indexOf("devolve:") === 0;
+    var clean = devolve ? id.slice(8) : id;
+    var row = TRAITS[clean];
+    return {
+      id: clean,
+      name: row ? row[0] : clean,
+      cost: row ? row[1] : null,
+      tree: row ? row[2] : "symptom",
+      known: !!row,
+      devolve: devolve
+    };
+  }
+
+  // ── map ─────────────────────────────────────────────────────────────────
+  var REGION_ORDER = ["NORTH AMERICA", "EUROPE", "MIDDLE EAST", "SOUTH AMERICA", "AFRICA", "ASIA"];
+  var REGION_LABEL = { "NORTH AMERICA": "N. AMERICA", "SOUTH AMERICA": "S. AMERICA", "ASIA": "ASIA / OCEANIA" };
+  var REGION_WIDTH = { "NORTH AMERICA": 66, "SOUTH AMERICA": 66, "EUROPE": 135, "AFRICA": 135, "MIDDLE EAST": 89, "ASIA": 89 };
+
+  var tileEls = [];
+
+  function buildMap(roster) {
+    var host = document.getElementById("map");
+    var groups = {};
+    for (var i = 0; i < roster.length; i++) {
+      var region = roster[i][1];
+      (groups[region] = groups[region] || []).push({ name: roster[i][0], index: i });
+    }
+    tileEls = new Array(roster.length);
+    REGION_ORDER.forEach(function (region) {
+      var members = groups[region];
+      if (!members) return;
+      var block = document.createElement("div");
+      block.className = "region";
+      block.style.width = (REGION_WIDTH[region] || 89) + "px";
+      var label = document.createElement("span");
+      label.className = "region-label";
+      label.textContent = REGION_LABEL[region] || region;
+      var grid = document.createElement("div");
+      grid.className = "tiles-grid";
+      members.forEach(function (m) {
+        var cell = document.createElement("div");
+        cell.className = "country";
+        cell.title = m.name;
+        grid.appendChild(cell);
+        tileEls[m.index] = cell;
+      });
+      block.appendChild(label);
+      block.appendChild(grid);
+      host.appendChild(block);
+    });
+  }
+
+  // Brightness carries how much of a country is affected; hue swings from
+  // amber toward crimson as more of the affected have died.
+  function tint(infected, dead) {
+    var affected = Math.min(1, (infected + dead) / 100);
+    var share = affected > 0 ? (dead / 100) / affected : 0;
+    var toward = Math.min(1, share * 3);
+    return "oklch(" + (0.28 + 0.44 * affected).toFixed(3) + " " +
+           (0.025 + 0.125 * affected).toFixed(3) + " " +
+           (65 - 32 * toward).toFixed(1) + ")";
+  }
+
+  function paintMap(world) {
+    if (!world) return;
+    for (var i = 0; i < tileEls.length; i++) {
+      var cell = tileEls[i], entry = world[i];
+      if (!cell || !entry) continue;
+      cell.style.background = tint(entry[0], entry[1]);
+      cell.style.outline = (entry[0] + entry[1]) < 70 ? "1px solid oklch(.75 .12 215)" : "none";
+    }
+  }
+
+  // ── chart ───────────────────────────────────────────────────────────────
+  function poly(frames, key, lastDay) {
+    var pts = [];
+    for (var i = 0; i < frames.length; i++) {
+      var f = frames[i];
+      var v = key === "cure" ? f.cure * 100 : f[key];
+      pts.push((f.day / lastDay * 400).toFixed(1) + "," + (300 - v / 100 * 300).toFixed(1));
+    }
+    return pts.join(" ");
+  }
+
+  // ── render ──────────────────────────────────────────────────────────────
+  var state = { frames: [], index: 0, lastDay: 1, playing: false, timer: null, buysRendered: -1 };
+
+  var el = {};
+  ["model","runmeta","outcome","notice","v-day","s-day","v-inf","s-inf","v-dead","s-dead",
+   "v-cure","s-cure","v-countries","reasoning","reasoning-label","action-name","action-sub",
+   "action-cost","dna-left","trait-count","trees","buys","counter","scrub","track-fill",
+   "playhead","chart-note","chart-end","p-head","prev","next","play","icon-play","icon-pause"
+  ].forEach(function (id) { el[id] = document.getElementById(id); });
+
+  function pct(v) { return (v == null ? "—" : v.toFixed(1) + "%"); }
+  function people(percent) {
+    var n = percent / 100 * 7093316000;
+    if (n >= 1e9) return (n / 1e9).toFixed(2) + "B people";
+    if (n >= 1e6) return Math.round(n / 1e6) + "M people";
+    return Math.round(n).toLocaleString() + " people";
+  }
+
+  function render() {
+    var f = state.frames[state.index];
+    if (!f) return;
+
+    el["v-day"].textContent = f.day;
+    el["s-day"].textContent = "of " + state.lastDay;
+    el["v-inf"].textContent = pct(f.inf);
+    el["s-inf"].textContent = people(f.inf);
+    el["v-dead"].textContent = pct(f.dead);
+    el["s-dead"].textContent = people(f.dead);
+    el["v-cure"].textContent = pct(f.cure * 100);
+    el["s-cure"].textContent = f.cure >= 1 ? "complete" : "";
+    el["v-countries"].textContent = (f.countries != null ? f.countries : "—") + " / " + tileEls.length + " infected";
+
+    if (f.reasoning) {
+      el.reasoning.textContent = f.reasoning;
+      el.reasoning.classList.remove("empty");
+    } else {
+      el.reasoning.textContent = "No reasoning recorded for this turn.";
+      el.reasoning.classList.add("empty");
+    }
+    el["reasoning-label"].textContent = "REASONING · TURN " + f.step;
+
+    if (f.action) {
+      el["action-name"].textContent = f.action;
+      el["action-name"].classList.remove("pass");
+      el["action-sub"].textContent = f.accepted
+        ? (f.trait && f.trait.devolve ? "devolve · accepted" : "accepted")
+        : "rejected";
+    } else {
+      el["action-name"].textContent = "pass";
+      el["action-name"].classList.add("pass");
+      el["action-sub"].textContent = "banked the day";
+    }
+    var cost = f.accepted && f.trait && !f.trait.devolve ? f.trait.cost : null;
+    el["action-cost"].textContent = cost != null ? cost : "—";
+    el["dna-left"].textContent = f.dna + " DNA left";
+
+    el["trait-count"].textContent = f.evolved.length + " / " + Object.keys(TRAITS).length;
+    paintMap(f.world);
+    renderTrees(f);
+    renderBuys();
+
+    var frac = state.frames.length > 1 ? state.index / (state.frames.length - 1) : 0;
+    el["track-fill"].style.width = (frac * 100) + "%";
+    el.playhead.style.left = "calc(" + (frac * 100) + "% - 1.5px)";
+    el["p-head"].setAttribute("x1", (f.day / state.lastDay * 400).toFixed(1));
+    el["p-head"].setAttribute("x2", (f.day / state.lastDay * 400).toFixed(1));
+    el.counter.textContent = f.step + " / " + state.frames.length + " · " + buysUpTo().length + " actions";
+    if (el.scrub.value !== String(state.index)) el.scrub.value = state.index;
+  }
+
+  function renderTrees(f) {
+    // Counted from the evolved list on the board, not from the purchase log,
+    // so a devolve is reflected too.
+    var counts = { symptom: 0, transmission: 0, ability: 0 };
+    for (var i = 0; i < f.evolved.length; i++) {
+      var row = TRAITS[f.evolved[i]];
+      if (row && counts[row[2]] != null) counts[row[2]]++;
+    }
+    var html = "";
+    ["symptom", "transmission", "ability"].forEach(function (tree) {
+      var total = TREE_TOTALS[tree];
+      var w = Math.round(counts[tree] / total * 100);
+      html += '<div class="tree"><span class="tree-name">' + tree + '</span>' +
+              '<div class="tree-track"><div class="tree-fill" style="width:' + w + '%;background:' + TREE_COLOR[tree] + '"></div></div>' +
+              '<span class="tree-count">' + counts[tree] + "/" + total + "</span></div>";
+    });
+    el.trees.innerHTML = html;
+  }
+
+  function buysUpTo() {
+    var out = [];
+    for (var i = 0; i <= state.index && i < state.frames.length; i++) {
+      var f = state.frames[i];
+      if (!f.accepted || !f.trait || f.trait.devolve) continue;
+      out.push({ day: f.day, name: f.trait.name, cost: f.trait.cost, tree: f.trait.tree });
+    }
+    return out;
+  }
+
+  function renderBuys() {
+    var buys = buysUpTo();
+    if (buys.length === state.buysRendered) return;
+    state.buysRendered = buys.length;
+    if (!buys.length) {
+      el.buys.innerHTML = '<div class="buys-empty">Nothing evolved yet.</div>';
+      return;
+    }
+    var html = "";
+    for (var i = buys.length - 1; i >= 0; i--) {
+      var b = buys[i];
+      html += '<div class="buy' + (i === buys.length - 1 ? " latest" : "") + '" style="border-left-color:' + TREE_COLOR[b.tree] + '">' +
+              '<span class="buy-day">d' + b.day + "</span>" +
+              '<span class="buy-name">' + b.name + "</span>" +
+              '<span class="buy-cost">' + (b.cost != null ? b.cost + " DNA" : "") + "</span></div>";
+    }
+    el.buys.innerHTML = html;
+  }
+
+  // ── transport ───────────────────────────────────────────────────────────
+  function go(i) {
+    state.index = Math.max(0, Math.min(state.frames.length - 1, i));
+    render();
+  }
+
+  function setPlaying(on) {
+    state.playing = on;
+    el["icon-play"].hidden = on;
+    el["icon-pause"].hidden = !on;
+    if (state.timer) { clearInterval(state.timer); state.timer = null; }
+    if (on) {
+      state.timer = setInterval(function () {
+        if (state.index >= state.frames.length - 1) { setPlaying(false); return; }
+        go(state.index + 1);
+      }, 40);
+    }
+  }
+
+  function wire() {
+    el.prev.addEventListener("click", function () { setPlaying(false); go(state.index - 1); });
+    el.next.addEventListener("click", function () { setPlaying(false); go(state.index + 1); });
+    el.play.addEventListener("click", function () {
+      if (!state.playing && state.index >= state.frames.length - 1) go(0);
+      setPlaying(!state.playing);
+    });
+    el.scrub.addEventListener("input", function () { setPlaying(false); go(Number(el.scrub.value)); });
+    document.getElementById("chart").addEventListener("click", function (ev) {
+      var box = this.getBoundingClientRect();
+      setPlaying(false);
+      go(Math.round((ev.clientX - box.left) / box.width * (state.frames.length - 1)));
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.target && /^(INPUT|TEXTAREA)$/.test(ev.target.tagName) && ev.key !== " ") return;
+      if (ev.key === "ArrowRight") { setPlaying(false); go(state.index + 1); ev.preventDefault(); }
+      else if (ev.key === "ArrowLeft") { setPlaying(false); go(state.index - 1); ev.preventDefault(); }
+      else if (ev.key === " ") { el.play.click(); ev.preventDefault(); }
+      else if (ev.key === "Home") { setPlaying(false); go(0); ev.preventDefault(); }
+      else if (ev.key === "End") { setPlaying(false); go(state.frames.length - 1); ev.preventDefault(); }
+    });
+  }
+
+  // ── boot ────────────────────────────────────────────────────────────────
+  function start(doc, isSample) {
+    var episode = pickEpisode(doc);
+    if (!episode) { fail("This replay has no episodes with turns in it."); return; }
+
+    state.frames = toFrames(episode.turns);
+    state.lastDay = state.frames[state.frames.length - 1].day || state.frames.length;
+
+    // A real export keeps the seed and the terminal block on `episodes[]`,
+    // keyed by episode id; the bundled sample carries them at the top level.
+    var meta = {};
+    if (Array.isArray(doc.episodes)) {
+      for (var e = 0; e < doc.episodes.length; e++) {
+        if (doc.episodes[e] && doc.episodes[e].id === episode.id) { meta = doc.episodes[e]; break; }
+      }
+    }
+
+    var last = state.frames[state.frames.length - 1];
+    var terminal = (last.end && last.end.terminal_info) || meta.terminal_info || {};
+    var outcome = terminal.outcome || last.outcome || "running";
+    var seed = doc.seed != null ? doc.seed : meta.seed;
+
+    var model = null;
+    for (var i = 0; i < episode.turns.length && !model; i++) model = episode.turns[i].model;
+    if (!model && doc.run && doc.run.config) model = doc.run.config.model;
+    el.model.textContent = model || (isSample ? "reference expert policy" : "[unknown model]");
+    el.runmeta.textContent = (seed != null ? "seed " + seed + " · " : "") + state.frames.length + " turns";
+    el.outcome.textContent = outcome;
+    el.outcome.setAttribute("data-outcome", outcome);
+
+    if (isSample) {
+      el.notice.hidden = false;
+      el.notice.innerHTML = "<b>Sample episode.</b> No benchmarked run is bundled yet, " +
+        "so this is the reference expert policy from <code>tools/calibrate.py</code> — not a language model. " +
+        "Its reasoning text is derived from the policy's own rule. Export a real run to " +
+        "<code>showcase/data/replay.json</code> and this page will use it instead.";
+    }
+
+    el["chart-end"].textContent = "day " + state.lastDay;
+    el["chart-note"].textContent = terminal.days_to_infect_50pct
+      ? "half the world by day " + terminal.days_to_infect_50pct : "";
+    document.getElementById("p-inf").setAttribute("points", poly(state.frames, "inf", state.lastDay));
+    document.getElementById("p-dead").setAttribute("points", poly(state.frames, "dead", state.lastDay));
+    document.getElementById("p-cure").setAttribute("points", poly(state.frames, "cure", state.lastDay));
+
+    var track = document.getElementById("track");
+    state.frames.forEach(function (f) {
+      if (!f.accepted || !f.action) return;
+      var tick = document.createElement("div");
+      tick.className = "tick";
+      tick.style.left = (f.day / state.lastDay * 100).toFixed(2) + "%";
+      track.appendChild(tick);
+    });
+
+    el.scrub.max = state.frames.length - 1;
+    wire();
+    go(0);
+  }
+
+  function fail(message) {
+    el.notice.hidden = false;
+    el.notice.innerHTML = "<b>No replay loaded.</b> " + message;
+  }
+
+  buildMap(window.PLAGUE_WORLD || []);
+  loadReal().then(function (real) {
+    if (real && real.replay) { start(real, false); return; }
+    if (window.PLAGUE_SAMPLE_REPLAY) { start(window.PLAGUE_SAMPLE_REPLAY, true); return; }
+    fail("Neither data/replay.json nor the bundled sample could be read.");
+  });
+})();
+</script>
+</body>
+</html>
