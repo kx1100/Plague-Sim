@@ -324,3 +324,69 @@ def test_fuzzy_never_returns_an_evolved_trait():
     affordable = get_affordable_traits(evolved, 999)
     assert Handler._fuzzy_trait("Air1", affordable) != "Air1"
     assert all(tid not in evolved for tid in affordable)
+
+
+# ── One-time-use specials (regression: reshuffle recycling exploit) ───────────
+
+def test_reshuffle_cannot_be_devolved(game):
+    game.dna = 999
+    evolve_trait(game, "GeneticHardening1")
+    evolve_trait(game, "GeneticReShuffle1")
+    dna_before = game.dna
+
+    assert devolve_trait(game, "GeneticReShuffle1") == 0
+    assert "GeneticReShuffle1" in game.disease.evolved, "must stay evolved"
+    assert game.dna == dna_before, "must not refund"
+
+
+def test_reshuffle_recycling_cannot_reset_the_cure(game):
+    """
+    Regression: devolve/re-evolve used to re-fire the rollback, walking the cure
+    down 0.90 -> 0.65 -> 0.40 -> 0.15 for 15 net DNA a cycle. It was the highest
+    scoring strategy in the game.
+    """
+    game.dna = 10_000
+    evolve_trait(game, "GeneticHardening1")
+    game.cure_progress = 0.9
+    evolve_trait(game, "GeneticReShuffle1")
+    assert game.cure_progress == pytest.approx(0.65)
+
+    for _ in range(3):
+        devolve_trait(game, "GeneticReShuffle1")
+        evolve_trait(game, "GeneticReShuffle1")
+        assert game.cure_progress == pytest.approx(0.65), "rollback re-fired"
+
+
+def test_reshuffle_special_fires_once_even_if_re_evolved_directly(game):
+    """The guard lives on the special, not on devolve, so no path can re-arm it."""
+    game.dna = 10_000
+    evolve_trait(game, "GeneticHardening1")
+    game.cure_progress = 0.9
+    evolve_trait(game, "GeneticReShuffle1")
+
+    game.disease.evolved.discard("GeneticReShuffle1")   # bypass devolve entirely
+    evolve_trait(game, "GeneticReShuffle1")
+    assert game.cure_progress == pytest.approx(0.65)
+
+
+def test_each_reshuffle_tier_fires_on_its_own(game):
+    game.dna = 10_000
+    evolve_trait(game, "GeneticHardening1")
+    game.cure_progress = 0.9
+    evolve_trait(game, "GeneticReShuffle1")
+    assert game.cure_progress == pytest.approx(0.65)
+    evolve_trait(game, "GeneticReShuffle2")
+    assert game.cure_progress == pytest.approx(0.25)
+
+
+def test_insanity_is_still_devolvable(game):
+    """
+    Insanity carries a special too, but slows_cure is a passive read from
+    `evolved` -- not one-time-use -- so it must stay devolvable.
+    """
+    game.dna = 10_000
+    for tid in ("Insomnia", "Paranoia", "Insanity"):
+        assert evolve_trait(game, tid) is True
+
+    assert devolve_trait(game, "Insanity") == 2
+    assert "Insanity" not in game.disease.evolved
