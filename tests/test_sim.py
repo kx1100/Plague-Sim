@@ -7,6 +7,7 @@ from data.traits import TRAITS, get_affordable_traits
 from env import PlagueEnv
 from models.game_state import GameState
 from simulation.actions import evolve_trait, devolve_trait
+from simulation import cure
 from simulation.cure import update_awareness, update_cure
 from simulation.deaths import process_deaths
 
@@ -178,6 +179,46 @@ def test_drug_resistance_slows_the_cure():
     update_cure(baseline)
     update_cure(resistant)
     assert resistant.cure_progress < baseline.cure_progress
+
+
+def test_slows_cure_special_is_read_from_trait_data():
+    """
+    Every trait the data marks `special: "slows_cure"` must actually slow the
+    cure. `cure.py` used to hardcode Insanity, which made the data key
+    decorative and silent if a second such trait were ever added.
+    """
+    slowing = [t for t, d in TRAITS.items() if d.get("special") == "slows_cure"]
+    assert slowing, "no trait carries slows_cure -- the test has lost its subject"
+
+    for trait_id in slowing:
+        baseline, slowed = GameState(), GameState()
+        for state in (baseline, slowed):
+            for country in state.countries.values():
+                country.awareness = 0.5
+        # Added straight to `evolved`; the trait's numeric effects are
+        # deliberately skipped so only the special is under test.
+        slowed.disease.evolved.add(trait_id)
+        update_cure(baseline)
+        update_cure(slowed)
+        assert slowed.cure_progress < baseline.cure_progress, trait_id
+
+
+def test_slows_cure_traits_stack(monkeypatch):
+    """
+    Two slowing traits must be worth more than one. Nothing in the tree carries
+    a second `slows_cure` today, so the set is patched to prove the penalty is
+    per-trait rather than a flat one-off.
+    """
+    monkeypatch.setattr(cure, "_SLOWS_CURE_TRAITS", frozenset({"Insanity", "Coma"}))
+    one, two = GameState(), GameState()
+    for state in (one, two):
+        for country in state.countries.values():
+            country.awareness = 0.5
+    one.disease.evolved.add("Insanity")
+    two.disease.evolved.update({"Insanity", "Coma"})
+    update_cure(one)
+    update_cure(two)
+    assert two.cure_progress < one.cure_progress
 
 
 # ── Termination ───────────────────────────────────────────────────────────────
