@@ -10,13 +10,22 @@ import argparse
 
 from env import PlagueEnv
 
+# Human-readable gloss for each terminal outcome the env can report.
+_OUTCOME_LABELS = {
+    "cured": "cured - the cure completed, the disease lost",
+    "extinct": "extinct - 95%+ of humanity dead, premium win",
+    "infected_all": "infected_all - no healthy humans left, win",
+    "died_out": "died_out - the disease burned out before spreading",
+    "timeout": "timeout - humanity survived the day cap",
+}
+
 
 def run_simulation(
     seed_country: str = "India",
     max_days: int = 600,
     verbose: bool = True,
 ) -> dict:
-    env = PlagueEnv()
+    env = PlagueEnv(max_steps=max_days)
     env.reset(seed=seed_country)
     game = env.game
 
@@ -52,7 +61,7 @@ def run_simulation(
 
     print()
     print("=== Final Score ===")
-    print(f"Outcome      : {score['outcome'] or 'no terminal state (hit day cap)'}")
+    print(f"Outcome      : {_OUTCOME_LABELS.get(score['outcome'], score['outcome'])}")
     print(f"Day          : {score['day']}")
     print(f"Infected     : {score['infected_pct']}%")
     print(f"Dead         : {score['dead_pct']}%")

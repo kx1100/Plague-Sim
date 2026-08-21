@@ -14,6 +14,19 @@ _RESHUFFLE_ROLLBACK = {
 _ONE_TIME_SPECIALS = frozenset(_RESHUFFLE_ROLLBACK)
 
 
+def devolvable_traits(evolved) -> list[str]:
+    """
+    The evolved traits `devolve_trait` will actually accept, sorted.
+
+    Kept next to `devolve_trait` so the observation cannot drift from the rule
+    the simulation enforces: one-time-use specials are locked in once bought.
+    """
+    return sorted(
+        tid for tid in evolved
+        if TRAITS.get(tid, {}).get("special") not in _ONE_TIME_SPECIALS
+    )
+
+
 def evolve_trait(game, trait_id: str) -> bool:
     """
     Spend DNA to evolve a trait. Returns True on success.
