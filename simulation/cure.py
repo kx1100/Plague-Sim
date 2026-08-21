@@ -1,3 +1,5 @@
+from data.traits import TRAITS
+
 # Per-country research contribution, scaled by wealth and awareness.
 #
 # This is the clock the disease races, and it is the main difficulty dial.
@@ -15,6 +17,16 @@ _CURE_CONTRIBUTION = 0.000042
 # meant making the world easier for everyone. At 5.0 careless play stalls near
 # 25% infected while patient play reaches saturation.
 _SEVERITY_CURE_SENSITIVITY = 5.0
+
+# Per-trait multiplier applied for every evolved trait marked
+# `special: "slows_cure"` in the trait data. Only Insanity carries the key
+# today, so a single 0.9 reproduces the behaviour this replaced; reading the
+# data means a second such trait works without touching this file.
+_SLOWS_CURE_MULTIPLIER = 0.9
+
+_SLOWS_CURE_TRAITS = frozenset(
+    tid for tid, t in TRAITS.items() if t.get("special") == "slows_cure"
+)
 
 
 def update_awareness(game) -> None:
@@ -34,7 +46,8 @@ def update_awareness(game) -> None:
 def update_cure(game) -> None:
     """
     Cure progress accumulates from wealthy, aware countries.
-    High severity accelerates research; drug resistance and genetic hardening slow it.
+    High severity accelerates research; drug resistance, genetic hardening and any
+    trait marked `special: "slows_cure"` in the trait data slow it.
     """
     if game.cure_progress >= 1.0:
         return
@@ -48,14 +61,15 @@ def update_cure(game) -> None:
     severity_boost = 1.0 + game.disease.severity * _SEVERITY_CURE_SENSITIVITY
     drug_penalty = max(0.1, 1.0 - game.disease.drug_resist * 0.15)
     hardening_penalty = max(0.1, 1.0 - game.disease.genetic_hardening * 0.15)
-    insanity_penalty = 0.9 if "Insanity" in game.disease.evolved else 1.0
+    slows_cure_count = len(_SLOWS_CURE_TRAITS & game.disease.evolved)
+    slows_cure_penalty = _SLOWS_CURE_MULTIPLIER**slows_cure_count
 
     daily = (
         total_contrib
         * severity_boost
         * drug_penalty
         * hardening_penalty
-        * insanity_penalty
+        * slows_cure_penalty
     )
 
     game.cure_progress = min(1.0, game.cure_progress + daily)
