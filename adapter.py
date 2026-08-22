@@ -65,8 +65,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"error": "Call /reset first."}, status=400)
                 return
             action = body.get("action", None)
+            raw_action = action
             action, action_error = self._validate_action(action, _env.game)
             obs, reward, done, info = _env.step(action)
+            # Report what was actually played, not what was typed. The
+            # normaliser turns "**Answer:** Air1" into "Air1" before stepping,
+            # and a replay that records the raw string shows an action no
+            # trait table can resolve.
+            info["action"] = action
+            if raw_action is not None and raw_action != action:
+                info["action_raw"] = raw_action
             if action_error:
                 info["action_error"] = action_error
                 info["available_traits"] = list(get_affordable_traits(

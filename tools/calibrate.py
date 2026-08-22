@@ -117,15 +117,19 @@ POLICIES = {
 # ── Episode runner ────────────────────────────────────────────────────────────
 
 def run_episode(policy, seed_country: str, rng_seed: int) -> dict:
-    # Two generators, deliberately: `rng_seed` goes to the env so every policy
-    # meets the same world for a given country, and the module-level seed makes
-    # policy_random's own choices repeatable. They were one generator until the
-    # env took ownership of its episode, which made a policy's draws and the
-    # world's draws interleave -- so what a policy scored depended on how many
-    # times it had rolled the dice.
+    # Two generators, deliberately. The env derives its world from the country
+    # name alone -- exactly what tools/bench_local.py does -- so "seed USA"
+    # means one specific world everywhere in the project, and a policy run here
+    # is directly comparable to the same policy run through the HTTP harness.
+    # Passing `rng_seed` to the env instead would silently give the two tools
+    # different worlds for the same country, which is how the expert policy
+    # came to win 2/10 here and 4/10 there.
+    #
+    # `rng_seed` still seeds the module generator, which is now only
+    # policy_random's own choices.
     random.seed(rng_seed)
     env = PlagueEnv()
-    env.reset(seed_country, rng_seed=rng_seed)
+    env.reset(seed_country)
 
     done = False
     while not done and env.game.day < 600:

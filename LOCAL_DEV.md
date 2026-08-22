@@ -96,6 +96,30 @@ default:
 
 A tripped guard stops the run and still reports the episodes that finished.
 
+### Reading the output
+
+Every run reports what the model's turns actually did:
+
+```
+actions  : 118 accepted, 3 rejected, 6 passed, 771 auto-passed
+```
+
+If more than a quarter of attempted actions are rejected, the run says so — a
+score built on rejected actions measures the reply parser, not the model. Empty
+replies are called out separately, because that is what a truncated reasoning
+model looks like from here.
+
+**Thinking models need room.** `qwen3` and friends put their reasoning in a
+separate field, and Ollama's token budget covers reasoning *and* the answer — so
+`--max-tokens 1024` can be spent entirely on thinking, leaving no action at all.
+The harness stops with an actionable error rather than scoring the silence.
+Use `--max-tokens 4096`, or `--ollama-think off` to turn thinking off entirely.
+
+**Reproducibility.** An episode's world comes from `--rng-seed`, defaulting to
+the seed itself, so the same seed list replays identically for every model —
+which is what makes two models' scores comparable. Pass `--rng-seed` explicitly
+to run repeats on one seed country.
+
 Other flags worth knowing: `--effort` and `--thinking` for the Anthropic
 backend (Claude models reject `--temperature`; pass `--effort none --thinking
 off` for models older than the Opus 5 family), `--history N` for how many recent

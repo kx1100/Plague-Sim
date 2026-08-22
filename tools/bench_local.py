@@ -330,11 +330,13 @@ class _PromptedAgent(Agent):
 class OllamaAgent(_PromptedAgent):
     """Local Ollama. What `mesocosm run local` used, and free."""
 
-    def __init__(self, model, system_prompt, budget, retries, host, temperature, max_tokens):
+    def __init__(self, model, system_prompt, budget, retries, host, temperature,
+                 max_tokens, think=None):
         super().__init__(model, system_prompt, budget, retries)
         self.host = host.rstrip("/")
         self.temperature = temperature
         self.max_tokens = max_tokens
+        self.think = think          # None = leave the model's own default alone
 
     def _call(self, user):
         payload = {
@@ -349,6 +351,8 @@ class OllamaAgent(_PromptedAgent):
                 "num_predict": self.max_tokens,
             },
         }
+        if self.think is not None:
+            payload["think"] = self.think
         body, status = _post_json(f"{self.host}/api/chat", payload, timeout=300)
         if status == 404:
             raise FatalAgentError(
@@ -361,10 +365,31 @@ class OllamaAgent(_PromptedAgent):
             tokens_in=data.get("prompt_eval_count", 0),
             tokens_out=data.get("eval_count", 0),
         )
-        return data.get("message", {}).get("content", "")
+
+        message = data.get("message", {})
+        content = (message.get("content") or "").strip()
+        # Thinking models (qwen3, deepseek-r1) return their reasoning in a
+        # separate field, and num_predict covers thinking AND content -- so a
+        # budget that looks generous can be spent entirely on thinking, leaving
+        # content empty. That reads downstream as "the model passed", which
+        # would score a capable model as if it sat out the game.
+        thinking = (message.get("thinking") or "").strip()
+        if not content and thinking:
+            raise FatalAgentError(
+                f"{self.model} used its whole {self.max_tokens}-token budget thinking "
+                f"and never answered. Raise --max-tokens (4096 is usually enough), "
+                f"or disable thinking with --ollama-think off."
+            )
+        if thinking and "REASON" not in content:
+            # Keep something readable for the replay when the model answered
+            # with a bare action and put its argument in the thinking field.
+            summary = thinking.splitlines()[-1][:300]
+            content = "\n".join([f"REASON: {summary}", content])
+        return content
 
     def describe(self):
-        return f"ollama/{self.model} at {self.host}"
+        think = "" if self.think is None else f", think={'on' if self.think else 'off'}"
+        return f"ollama/{self.model} at {self.host}{think}"
 
 
 class AnthropicAgent(_PromptedAgent):
@@ -569,6 +594,12 @@ def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dic
     obs, rng_seed = env.reset(seed, args.rng_seed)
     turns, history, done, step = [], [], False, 0
     truncated, terminal = None, None
+    # What the model's turns actually did. A score is only a measure of play if
+    # the actions were understood: a model whose every reply is rejected scores
+    # the same as one that deliberately passes all game, and without this the
+    # two are indistinguishable in the results.
+    health = dict(accepted=0, rejected_unknown=0, rejected_illegal=0,
+                  passed=0, auto_passed=0, unparsed=0)
 
     while not done and step < args.max_steps:
         step += 1
@@ -579,6 +610,7 @@ def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dic
             # model call to hear "null" is the bulk of an episode's cost.
             action, reasoning = None, "auto-pass: nothing affordable"
             budget.skipped += 1
+            health["auto_passed"] += 1
         else:
             try:
                 action, reasoning = agent.act(before, history)
@@ -591,6 +623,9 @@ def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dic
                 break
 
         obs, reward, done, info = env.step(action)
+        # The adapter normalises free text into a trait ID; prefer what it
+        # actually played so the replay and the purchase history are readable.
+        played = info.get("action", action)
         if done:
             # env.step merges final_score() into info on the terminating step.
             # Grab it before the per-turn filter below drops everything the
@@ -598,10 +633,29 @@ def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dic
             terminal = info.get("score")
 
         accepted = info.get("action_accepted")
+        if action is None:
+            if not (args.skip_idle and not before["available_traits"] and agent.uses_model):
+                # An empty reply and a deliberate "null" both reach the env as
+                # no action, but they mean opposite things about the model.
+                health["unparsed" if not reasoning.strip() else "passed"] += 1
+        elif info.get("action_error"):
+            # Two different failures wear the same "rejected" label, and they
+            # belong to different people. An unreadable trait ID is the
+            # harness's problem -- the reply parser did not recover what the
+            # model meant. A legal-but-wrong move (buying a trait it already
+            # owns, or cannot afford) is the model's, and is exactly the
+            # long-horizon state-tracking the benchmark exists to measure.
+            if "not a valid trait ID" in info["action_error"]:
+                health["rejected_unknown"] += 1
+            else:
+                health["rejected_illegal"] += 1
+        else:
+            health["accepted"] += 1
+
         if info.get("action_error") and args.verbose:
             print(f"    day {info['day']}: rejected {action!r} — {info['action_error']}")
         history.append(
-            f"day {info['day']}: {action or 'pass'}"
+            f"day {info['day']}: {played or 'pass'}"
             f"{'' if accepted is not False else ' (rejected)'}"
             f" | infected {obs['infected_pct']}% dead {obs['dead_pct']}%"
             f" cure {obs['cure_progress'] * 100:.0f}% dna {obs['dna']}"
@@ -614,7 +668,7 @@ def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dic
             "board_before": {k: before[k] for k in _OBS_KEYS},
             "board_after": {k: obs[k] for k in _AFTER_KEYS},
             "reasoning": reasoning,
-            "action": action,
+            "action": played,
             "reward": reward,
             "terminated": done,
             "info": {
@@ -645,6 +699,7 @@ def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dic
     return {
         "seed": seed,
         "rng_seed": rng_seed,
+        "health": health,
         "steps": step,
         "done": done,
         "truncated": truncated,
@@ -693,6 +748,49 @@ def aggregate(manifest: dict, episodes: list[dict]) -> list[tuple[str, str]]:
     return rows
 
 
+def action_health(episodes: list[dict]) -> tuple[str, str | None]:
+    """
+    Summarise what the model's turns did, and warn when a score is not really
+    about play. A rejection rate above a quarter means the number below is
+    substantially a measure of how well the model matched an output format --
+    publish that as a capability result and it is simply wrong.
+    """
+    total = dict(accepted=0, rejected_unknown=0, rejected_illegal=0,
+                 passed=0, auto_passed=0, unparsed=0)
+    for ep in episodes:
+        for key, value in (ep.get("health") or {}).items():
+            total[key] = total.get(key, 0) + value
+
+    rejected = total["rejected_unknown"] + total["rejected_illegal"]
+    attempted = total["accepted"] + rejected
+    line = (
+        f"{total['accepted']} accepted, {rejected} rejected "
+        f"({total['rejected_illegal']} illegal moves, "
+        f"{total['rejected_unknown']} unreadable), "
+        f"{total['passed']} passed, {total['auto_passed']} auto-passed"
+    )
+    if total["unparsed"]:
+        line += f", {total['unparsed']} empty replies"
+
+    warning = None
+    if attempted and total["rejected_unknown"] / attempted > 0.10:
+        # Only the unreadable ones implicate the harness. Illegal moves are a
+        # result, not a defect, so they must not trigger a "your numbers are
+        # suspect" warning -- that would train the reader to discount exactly
+        # the failure the benchmark is measuring.
+        warning = (
+            f"{total['rejected_unknown'] / attempted:.0%} of attempted actions could not "
+            f"be read as a trait ID. That is the reply parser failing, not the model "
+            f"playing badly — inspect with --verbose before reporting these scores."
+        )
+    elif total["unparsed"] > max(3, 0.1 * (attempted + total["passed"])):
+        warning = (
+            f"{total['unparsed']} turns produced no readable reply. If this is a "
+            f"reasoning model, --max-tokens may be truncating it before it answers."
+        )
+    return line, warning
+
+
 # ── Wiring ────────────────────────────────────────────────────────────────────
 
 def build_agent(args, system_prompt: str, budget: Budget) -> Agent:
@@ -706,9 +804,10 @@ def build_agent(args, system_prompt: str, budget: Budget) -> Agent:
     if backend == "policy":
         return PolicyAgent(model)
     if backend == "ollama":
+        think = None if args.ollama_think == "auto" else (args.ollama_think == "on")
         return OllamaAgent(
             model, system_prompt, budget, args.retries,
-            args.ollama_host, args.temperature, args.max_tokens,
+            args.ollama_host, args.temperature, args.max_tokens, think,
         )
     if backend == "anthropic":
         return AnthropicAgent(
@@ -796,6 +895,10 @@ def main() -> int:
     parser.add_argument("--thinking", default="adaptive", choices=["adaptive", "off"],
                         help="anthropic backend: adaptive thinking")
     parser.add_argument("--ollama-host", default=os.environ.get("OLLAMA_HOST", "http://localhost:11434"))
+    parser.add_argument("--ollama-think", default="auto", choices=["auto", "on", "off"],
+                        help="Thinking models (qwen3, deepseek-r1): 'auto' leaves the "
+                             "model's own default, which spends --max-tokens on thinking "
+                             "before it answers.")
     parser.add_argument("--base-url", default="https://api.openai.com/v1",
                         help="openai backend endpoint, e.g. "
                              "https://generativelanguage.googleapis.com/v1beta/openai for Gemini")
@@ -872,6 +975,8 @@ def main() -> int:
             f"on day {score.get('day', '?')} | victory {score.get('victory_progress', 0):.4f} "
             f"| dead {score.get('dead_pct', 0)}% | {budget.summary()}"
         )
+        if agent.uses_model:
+            print(f"      actions: {action_health([record])[0]}")
         if record["truncated"]:
             stopped = record["truncated"]
             break
@@ -882,6 +987,11 @@ def main() -> int:
     print(f"episodes : {len(episodes)} in {time.time() - started:.0f}s")
     if agent.uses_model:
         print(f"usage    : {budget.summary()}")
+        health_line, health_warning = action_health(episodes)
+        print(f"actions  : {health_line}")
+        if health_warning:
+            print()
+            print(f"  ⚠  {health_warning}")
     if stopped:
         print(f"stopped  : {stopped} — metrics below cover the episodes that finished")
     print()
@@ -918,7 +1028,7 @@ def main() -> int:
             "run": {"config": {"model": args.model}},
             "episodes": [
                 {"id": key, "seed": ep["seed"], "rng_seed": ep["rng_seed"],
-                 "terminal_info": ep["score"]}
+                 "action_health": ep["health"], "terminal_info": ep["score"]}
                 for key, ep in keyed
             ],
             "replay": {key: ep["turns"] for key, ep in keyed},
