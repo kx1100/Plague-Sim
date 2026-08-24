@@ -33,6 +33,11 @@ Spend guards, for the paid backends:
 
 A tripped budget stops the run and reports the episodes that finished; it never
 throws the completed work away.
+
+Every run is recorded to `runs/<date>-<model>/run.json` and appended to
+`runs/index.json`, with the provenance needed to read it back cold months later
+-- seeds, every protocol setting, the system prompt, the manifest hash and the
+git SHA. `--no-save` turns that off; see tools/run_store.py.
 """
 
 import argparse
@@ -48,6 +53,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from tools.calibrate import POLICIES, DEFAULT_SEEDS      # noqa: E402
+from tools import run_store                              # noqa: E402
 
 # Anthropic list prices, USD per million tokens (input, output). Used only to
 # estimate spend against --max-cost; --price-in/--price-out override for any
@@ -594,6 +600,12 @@ def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dic
     obs, rng_seed = env.reset(seed, args.rng_seed)
     turns, history, done, step = [], [], False, 0
     truncated, terminal = None, None
+    # Budget counters run for the whole run, so an episode's own usage is the
+    # delta across it. Recorded per episode because that is the unit a reader
+    # compares: "gemma3 costs 452s an episode" is the number that decides
+    # whether a ten-seed sweep fits in a night.
+    started_at = time.time()
+    spent = (budget.calls, budget.tokens_in, budget.tokens_out, budget.tokens_cached)
     # What the model's turns actually did. A score is only a measure of play if
     # the actions were understood: a model whose every reply is rejected scores
     # the same as one that deliberately passes all game, and without this the
@@ -705,6 +717,13 @@ def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dic
         "truncated": truncated,
         "score": score,
         "turns": turns,
+        "wall_time_seconds": round(time.time() - started_at, 1),
+        "usage": {
+            "calls": budget.calls - spent[0],
+            "tokens_in": budget.tokens_in - spent[1],
+            "tokens_out": budget.tokens_out - spent[2],
+            "tokens_cached": budget.tokens_cached - spent[3],
+        },
     }
 
 
@@ -728,9 +747,14 @@ def _incomplete_score(turns: list[dict]) -> dict:
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
-def aggregate(manifest: dict, episodes: list[dict]) -> list[tuple[str, str]]:
-    """Mean of each terminal_field metric named in the manifest."""
-    rows = []
+def metric_means(manifest: dict, episodes: list[dict]) -> dict[str, dict]:
+    """
+    Mean of each terminal_field metric named in the manifest, with the count it
+    was taken over. `n` below `episodes` means some episode did not report the
+    field -- a budget-stopped one, usually -- and a reader must see that rather
+    than a mean quietly taken over fewer runs than it claims.
+    """
+    means = {}
     for metric in manifest["scoring"]["metrics"]:
         if metric.get("type") != "terminal_field":
             continue
@@ -739,13 +763,42 @@ def aggregate(manifest: dict, episodes: list[dict]) -> list[tuple[str, str]]:
             ep["score"][field] for ep in episodes
             if ep["score"] and isinstance(ep["score"].get(field), (int, float))
         ]
-        if not values:
-            rows.append((metric["name"], "n/a"))
+        means[metric["name"]] = {
+            "field": field,
+            "mean": sum(values) / len(values) if values else None,
+            "n": len(values),
+            "episodes": len(episodes),
+        }
+    return means
+
+
+def aggregate(manifest: dict, episodes: list[dict]) -> list[tuple[str, str]]:
+    """The same means, formatted for the terminal."""
+    rows = []
+    for name, stat in metric_means(manifest, episodes).items():
+        if stat["mean"] is None:
+            rows.append((name, "n/a"))
             continue
-        mean = sum(values) / len(values)
-        note = "" if len(values) == len(episodes) else f"  (n={len(values)})"
-        rows.append((metric["name"], f"{mean:.4f}{note}"))
+        note = "" if stat["n"] == stat["episodes"] else f"  (n={stat['n']})"
+        rows.append((name, f"{stat['mean']:.4f}{note}"))
     return rows
+
+
+def outcome_counts(episodes: list[dict]) -> dict[str, int]:
+    counts = {}
+    for ep in episodes:
+        key = (ep["score"] or {}).get("outcome") or "incomplete"
+        counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def health_totals(episodes: list[dict]) -> dict[str, int]:
+    total = dict(accepted=0, rejected_unknown=0, rejected_illegal=0,
+                 passed=0, auto_passed=0, unparsed=0)
+    for ep in episodes:
+        for key, value in (ep.get("health") or {}).items():
+            total[key] = total.get(key, 0) + value
+    return total
 
 
 def action_health(episodes: list[dict]) -> tuple[str, str | None]:
@@ -755,11 +808,7 @@ def action_health(episodes: list[dict]) -> tuple[str, str | None]:
     substantially a measure of how well the model matched an output format --
     publish that as a capability result and it is simply wrong.
     """
-    total = dict(accepted=0, rejected_unknown=0, rejected_illegal=0,
-                 passed=0, auto_passed=0, unparsed=0)
-    for ep in episodes:
-        for key, value in (ep.get("health") or {}).items():
-            total[key] = total.get(key, 0) + value
+    total = health_totals(episodes)
 
     rejected = total["rejected_unknown"] + total["rejected_illegal"]
     attempted = total["accepted"] + rejected
@@ -853,6 +902,14 @@ def parse_seeds(raw: str | None, episodes: int) -> list:
     return seeds
 
 
+def _display_path(path: Path) -> str:
+    """Repo-relative where it is inside the repo, absolute otherwise."""
+    try:
+        return path.resolve().relative_to(ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -906,11 +963,17 @@ def main() -> int:
                         help="Env var holding the key for --base-url (e.g. GEMINI_API_KEY)")
 
     parser.add_argument("--export", help="Write the run to PATH in the run-export shape")
+    parser.add_argument("--runs-dir", default=str(run_store.RUNS_DIR),
+                        help="Where run records are kept (default: runs/)")
+    parser.add_argument("--no-save", dest="save_run", action="store_false",
+                        help="Do not write a run record. Saving is the default because "
+                             "a sweep that only ever reached a terminal is not a result.")
     parser.add_argument("--quiet", dest="verbose", action="store_false",
                         help="Suppress the per-30-day progress lines")
     args = parser.parse_args()
 
-    manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    manifest_text = Path(args.manifest).read_text(encoding="utf-8")
+    manifest = json.loads(manifest_text)
     system_prompt = build_system_prompt(manifest, args.system_prompt)
 
     seeds = parse_seeds(args.seeds, args.episodes)
@@ -981,10 +1044,11 @@ def main() -> int:
             stopped = record["truncated"]
             break
 
+    elapsed = time.time() - started
     print()
     print("=== Run summary ===")
     print(f"agent    : {agent.describe()}")
-    print(f"episodes : {len(episodes)} in {time.time() - started:.0f}s")
+    print(f"episodes : {len(episodes)} in {elapsed:.0f}s")
     if agent.uses_model:
         print(f"usage    : {budget.summary()}")
         health_line, health_warning = action_health(episodes)
@@ -1002,12 +1066,31 @@ def main() -> int:
         mark = " <- primary" if name == primary else ""
         print(f"  {name:<{width}}  {value}{mark}")
 
-    outcomes = {}
-    for ep in episodes:
-        key = (ep["score"] or {}).get("outcome") or "incomplete"
-        outcomes[key] = outcomes.get(key, 0) + 1
+    outcomes = outcome_counts(episodes)
     print()
-    print("  outcomes: " + ", ".join(f"{k} x{v}" for k, v in sorted(outcomes.items())))
+    print("  outcomes: " + ", ".join(f"{k} x{v}" for k, v in outcomes.items()))
+
+    if args.save_run and episodes:
+        runs_dir = Path(args.runs_dir)
+        record = run_store.build_run_record(
+            run_id=run_store.allocate_run_id(args.model, runs_dir),
+            args=args,
+            agent_description=agent.describe(),
+            system_prompt=system_prompt,
+            manifest=manifest,
+            manifest_text=manifest_text,
+            seeds=seeds,
+            episodes=episodes,
+            budget=budget,
+            metrics=metric_means(manifest, episodes),
+            outcomes=outcomes,
+            health=health_totals(episodes),
+            wall_time=elapsed,
+            stopped=stopped,
+        )
+        saved = run_store.save_run(record, runs_dir)
+        index = run_store.append_to_index(record, saved, runs_dir)
+        print(f"\n  recorded {_display_path(saved)} (+ {_display_path(index)})")
 
     if args.export:
         path = Path(args.export)

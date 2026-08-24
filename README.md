@@ -183,6 +183,21 @@ model is ~600 calls per episode, so the spend guards — `--probe`, `--max-calls
 See [LOCAL_DEV.md](LOCAL_DEV.md) for the full flag table, the Ollama dev loop and
 the Mesocosm submission commands.
 
+### Recorded runs
+
+Every run writes `runs/<date>-<model>/run.json` and appends `runs/index.json`.
+Both are tracked in git, because a run made once and published has to be
+readable cold: the record carries the seed list, every protocol setting, the
+system prompt in full, the manifest hash, the git SHA, per-episode terminal
+fields, action-health counts, token usage and wall time. `--no-save` turns it
+off and `--runs-dir` moves it.
+
+No credential ever reaches a record: it stores the *name* of the API-key
+environment variable, never its value, and `--base-url` is scrubbed of userinfo,
+query string and key-shaped path segments, since some providers carry the key in
+the URL. `tests/test_no_secrets.py` scans the tracked tree so a paste accident
+fails the suite instead of shipping.
+
 ## Watching a run back
 
 [showcase/index.html](showcase/index.html) replays one episode day by day --
@@ -284,7 +299,9 @@ models/                Country, Disease, GameState, world_builder
 simulation/            spread, deaths, cure, dna, actions
 tools/calibrate.py     balance harness and acceptance targets
 tools/bench_local.py   run the benchmark against a model, without Mesocosm
-tests/                 126 tests: sim mechanics, env lifecycle, adapter, balance, harness
+tools/run_store.py     run records: provenance, redaction, runs/index.json
+runs/                  recorded runs, tracked and published
+tests/                 155 tests: sim mechanics, env lifecycle, adapter, balance, harness
 showcase/index.html    replay UI -- open it directly, no build step
 tools/make_example_replay.py  regenerates the showcase's bundled sample
 ```
