@@ -21,7 +21,7 @@ python -m venv .venv
 
 .venv/Scripts/python.exe run.py                 # passive baseline, seeded in India
 .venv/Scripts/python.exe run.py --help          # --seed-country, --max-days, --quiet
-.venv/Scripts/python.exe -m pytest tests -q     # 96 tests
+.venv/Scripts/python.exe -m pytest tests -q     # 158 tests
 ```
 
 The simulation itself is pure stdlib — `requirements.txt` is deliberately empty
@@ -301,7 +301,7 @@ tools/calibrate.py     balance harness and acceptance targets
 tools/bench_local.py   run the benchmark against a model, without Mesocosm
 tools/run_store.py     run records: provenance, redaction, runs/index.json
 runs/                  recorded runs, tracked and published
-tests/                 155 tests: sim mechanics, env lifecycle, adapter, balance, harness
+tests/                 158 tests: sim mechanics, env lifecycle, adapter, balance, harness
 showcase/index.html    replay UI -- open it directly, no build step
 tools/make_example_replay.py  regenerates the showcase's bundled sample
 ```

@@ -161,6 +161,30 @@ def test_only_the_name_of_the_key_variable_is_stored(monkeypatch):
     assert secret not in json.dumps(record)
 
 
+def test_the_record_pins_down_what_the_tag_resolved_to():
+    """
+    `ollama/llama3.2` is whatever `latest` points at on the day. A run
+    published permanently under a name that can be repointed is not a
+    reproducible result, so the digest and the weights go in the record.
+    """
+    record = build(model_provenance={
+        "resolved_from": "llama3.2", "parameter_size": "3.2B",
+        "quantization_level": "Q4_K_M", "digest": "a80c4f17acd5",
+    })
+    assert record["model"]["details"]["digest"] == "a80c4f17acd5"
+    assert record["model"]["details"]["parameter_size"] == "3.2B"
+
+
+def test_a_backend_that_cannot_identify_itself_still_records_a_detail_block():
+    """Best effort: an absent answer is an empty block, never a missing key."""
+    assert build()["model"]["details"] == {}
+
+
+def test_reference_policies_report_no_model_details():
+    from tools.bench_local import PolicyAgent
+    assert PolicyAgent("expert").provenance() == {}
+
+
 def test_local_backends_record_no_key_at_all():
     record = build()
     assert record["model"]["api_key_env"] is None

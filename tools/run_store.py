@@ -142,7 +142,7 @@ def allocate_run_id(model: str, runs_dir: Path = RUNS_DIR,
 def build_run_record(
     *, run_id, args, agent_description, system_prompt, manifest, manifest_text,
     seeds, episodes, budget, metrics, outcomes, health, wall_time,
-    stopped=None, when=None,
+    model_provenance=None, stopped=None, when=None,
 ) -> dict:
     """
     Assemble everything needed to read this run back cold: what was run, how,
@@ -161,6 +161,9 @@ def build_run_record(
             "backend": backend,
             "name": model,
             "description": agent_description,
+            # What the tag actually resolved to. `ollama/llama3.2` is a moving
+            # target; the digest and parameter count are not.
+            "details": model_provenance or {},
             # The name of the variable, never its value. Local backends need no
             # key at all, and this stays null for them.
             "api_key_env": args.api_key_env if uses_key else None,

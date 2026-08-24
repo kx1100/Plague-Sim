@@ -282,6 +282,15 @@ class Agent:
     def describe(self) -> str:
         raise NotImplementedError
 
+    def provenance(self) -> dict:
+        """
+        Whatever pins down which model this actually was. A tag is mutable --
+        `llama3.2` means whatever `latest` points at on the day -- and a run
+        published permanently under a name that can be repointed is not a
+        reproducible result. Best effort: a backend that cannot say returns {}.
+        """
+        return {}
+
 
 class PolicyAgent(Agent):
     """A reference policy from tools/calibrate.py. No model, no spend."""
@@ -396,6 +405,50 @@ class OllamaAgent(_PromptedAgent):
     def describe(self):
         think = "" if self.think is None else f", think={'on' if self.think else 'off'}"
         return f"ollama/{self.model} at {self.host}{think}"
+
+    def provenance(self):
+        """
+        The weights behind the tag: digest, parameter count and quantization.
+        `llama3.2` is 3.2B Q4_K_M today and could be repointed tomorrow, and a
+        published comparison has to say which one it measured.
+        """
+        try:
+            body, status = _post_json(
+                f"{self.host}/api/show", {"model": self.model}, timeout=30
+            )
+            if status >= 400:
+                return {}
+            shown = json.loads(body)
+        except (TransientAgentError, json.JSONDecodeError):
+            return {}
+
+        details = shown.get("details") or {}
+        info = shown.get("model_info") or {}
+        found = {
+            "resolved_from": self.model,
+            "family": details.get("family"),
+            "parameter_size": details.get("parameter_size"),
+            "parameter_count": info.get("general.parameter_count"),
+            "quantization_level": details.get("quantization_level"),
+            "format": details.get("format"),
+            "basename": info.get("general.basename"),
+            "finetune": info.get("general.finetune"),
+            "digest": self._digest(),
+        }
+        return {key: value for key, value in found.items() if value is not None}
+
+    def _digest(self):
+        """Ollama reports it on the tag listing rather than on /api/show."""
+        try:
+            with urllib.request.urlopen(f"{self.host}/api/tags", timeout=15) as resp:
+                tags = json.loads(resp.read().decode("utf-8", "replace"))
+        except (urllib.error.URLError, OSError, json.JSONDecodeError):
+            return None
+        wanted = self.model if ":" in self.model else f"{self.model}:latest"
+        for entry in tags.get("models", []):
+            if entry.get("name") == wanted:
+                return entry.get("digest")
+        return None
 
 
 class AnthropicAgent(_PromptedAgent):
@@ -1086,6 +1139,7 @@ def main() -> int:
             outcomes=outcomes,
             health=health_totals(episodes),
             wall_time=elapsed,
+            model_provenance=agent.provenance(),
             stopped=stopped,
         )
         saved = run_store.save_run(record, runs_dir)
