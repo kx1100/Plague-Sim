@@ -43,6 +43,7 @@ git SHA. `--no-save` turns that off; see tools/run_store.py.
 import argparse
 import json
 import os
+import random
 import sys
 import time
 import urllib.error
@@ -291,6 +292,9 @@ class Agent:
         """
         return {}
 
+    def begin_episode(self, rng_seed) -> None:
+        """Called after reset, for an agent whose own choices need seeding."""
+
 
 class PolicyAgent(Agent):
     """A reference policy from tools/calibrate.py. No model, no spend."""
@@ -308,6 +312,17 @@ class PolicyAgent(Agent):
     def act(self, obs, history):
         action = self.policy(obs)
         return action, f"policy/{self.name}: {action or 'pass'}"
+
+    def begin_episode(self, rng_seed):
+        """
+        `policy_random` draws from the module generator, which nothing here was
+        seeding -- so the one baseline with any randomness in it scored
+        differently on every run, and a published `random` line that a reader
+        cannot reproduce is worse than no baseline at all. Seeded from the
+        episode's own seed rather than its position in the list, so `random` on
+        Russia plays the same game whether Russia is run alone or ninth.
+        """
+        random.seed(rng_seed)
 
     def describe(self):
         return f"policy/{self.name} (reference policy, not a language model)"
@@ -651,6 +666,7 @@ _AFTER_KEYS = _OBS_KEYS + ("evolved_traits",)
 
 def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dict:
     obs, rng_seed = env.reset(seed, args.rng_seed)
+    agent.begin_episode(rng_seed)
     turns, history, done, step = [], [], False, 0
     truncated, terminal = None, None
     # Budget counters run for the whole run, so an episode's own usage is the
@@ -1141,6 +1157,7 @@ def main() -> int:
             wall_time=elapsed,
             model_provenance=agent.provenance(),
             stopped=stopped,
+            runs_dir=runs_dir,
         )
         saved = run_store.save_run(record, runs_dir)
         index = run_store.append_to_index(record, saved, runs_dir)

@@ -15,6 +15,7 @@ import pytest
 
 from tools.bench_local import Budget, metric_means, outcome_counts, health_totals
 from tools import run_store
+from tools.run_store import ROOT
 
 
 WHEN = datetime(2026, 8, 23, 21, 5, 0, tzinfo=timezone.utc)
@@ -113,6 +114,27 @@ def test_the_record_identifies_the_environment_it_ran_against():
     assert "sha" in environment["git"] and "dirty" in environment["git"]
 
 
+def test_the_run_output_directory_does_not_make_the_tree_look_dirty(tmp_path):
+    """
+    `runs/` is untracked until someone commits it, so a run that writes there
+    sees its own output in `git status` and reports the tree dirty. Every
+    record in a sweep would carry a false alarm, and a flag that is always true
+    tells a reader nothing.
+    """
+    runs = ROOT / "runs"
+    clean = run_store.git_provenance(ignore=runs)
+    naive = run_store.git_provenance()
+    assert clean["sha"] == naive["sha"]
+    # Whatever the tree's real state, excluding run output can only ever remove
+    # entries -- so the ignored reading is never dirtier than the naive one.
+    assert not (clean["dirty"] and not naive["dirty"])
+
+
+def test_a_runs_dir_outside_the_repo_cannot_dirty_it(tmp_path):
+    """--runs-dir /tmp/... is not a repo path; the exclusion is simply skipped."""
+    assert run_store.git_provenance(ignore=tmp_path)["sha"] is not None
+
+
 def test_the_system_prompt_is_embedded_in_full():
     """Publishing it is better science than describing it — and it is the one
     input identical on all ~600 calls of an episode."""
@@ -183,6 +205,45 @@ def test_a_backend_that_cannot_identify_itself_still_records_a_detail_block():
 def test_reference_policies_report_no_model_details():
     from tools.bench_local import PolicyAgent
     assert PolicyAgent("expert").provenance() == {}
+
+
+def test_the_random_baseline_replays_identically_for_a_given_seed():
+    """
+    `random` is the only baseline with any randomness in it, and it is the line
+    a reader uses to judge whether a model beat careless play. Unseeded, it
+    scored differently on every run — 0.8645 one day and 0.8791 the next.
+    """
+    from tools.bench_local import PolicyAgent
+
+    agent = PolicyAgent("random")
+    obs = {"available_traits": [f"Trait{i}" for i in range(20)]}
+
+    def episode(seed):
+        agent.begin_episode(seed)
+        return [agent.act(obs, [])[0] for _ in range(15)]
+
+    assert episode("Russia") == episode("Russia")
+    assert episode("Russia") != episode("Brazil")
+
+
+def test_seeding_a_policy_does_not_depend_on_its_place_in_the_seed_list():
+    """Seeded from the seed itself, so a seed run alone plays the same game it
+    plays ninth — the lesson of the two harnesses disagreeing in commit 13."""
+    from tools.bench_local import PolicyAgent
+
+    obs = {"available_traits": [f"Trait{i}" for i in range(20)]}
+    agent = PolicyAgent("random")
+
+    agent.begin_episode("Russia")
+    alone = [agent.act(obs, [])[0] for _ in range(10)]
+
+    for seed in ["India", "China", "USA"]:      # episodes ahead of it in a list
+        agent.begin_episode(seed)
+        agent.act(obs, [])
+    agent.begin_episode("Russia")
+    ninth = [agent.act(obs, [])[0] for _ in range(10)]
+
+    assert alone == ninth
 
 
 def test_local_backends_record_no_key_at_all():

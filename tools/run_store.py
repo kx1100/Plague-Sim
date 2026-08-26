@@ -93,11 +93,17 @@ def redact_url(url: str | None) -> str | None:
 
 # ── Provenance ────────────────────────────────────────────────────────────────
 
-def git_provenance(root: Path = ROOT) -> dict:
+def git_provenance(root: Path = ROOT, ignore: Path | None = None) -> dict:
     """
     The commit the run was made from, and whether the tree was clean. A dirty
     tree does not invalidate a run, but a reader deserves to know the SHA does
     not fully describe the code that produced it.
+
+    `ignore` is the run output directory, and excluding it is the whole reason
+    this takes an argument: `runs/` is untracked until someone commits it, so a
+    run that writes there would see its own output and report the tree dirty.
+    Every record in a sweep would carry a false alarm, and a flag that is always
+    true tells a reader nothing.
     """
     def git(*args):
         try:
@@ -108,7 +114,16 @@ def git_provenance(root: Path = ROOT) -> dict:
             return None
         return out.stdout.strip() if out.returncode == 0 else None
 
-    status = git("status", "--porcelain")
+    status_args = ["status", "--porcelain"]
+    if ignore is not None:
+        try:
+            relative = ignore.resolve().relative_to(root.resolve()).as_posix()
+        except (ValueError, OSError):
+            relative = None          # a --runs-dir outside the repo cannot dirty it
+        if relative:
+            status_args += ["--", ".", f":(exclude){relative}"]
+
+    status = git(*status_args)
     return {"sha": git("rev-parse", "HEAD"), "dirty": None if status is None else bool(status)}
 
 
@@ -142,7 +157,7 @@ def allocate_run_id(model: str, runs_dir: Path = RUNS_DIR,
 def build_run_record(
     *, run_id, args, agent_description, system_prompt, manifest, manifest_text,
     seeds, episodes, budget, metrics, outcomes, health, wall_time,
-    model_provenance=None, stopped=None, when=None,
+    model_provenance=None, stopped=None, when=None, runs_dir=None,
 ) -> dict:
     """
     Assemble everything needed to read this run back cold: what was run, how,
@@ -176,7 +191,7 @@ def build_run_record(
             "binding_vow_version": manifest["binding_vow"]["version"],
             "primary_metric": manifest["scoring"]["primary_metric"],
             "manifest_sha256": _sha256(manifest_text),
-            "git": git_provenance(),
+            "git": git_provenance(ignore=runs_dir or RUNS_DIR),
         },
         "protocol": {
             "seeds": list(seeds),
