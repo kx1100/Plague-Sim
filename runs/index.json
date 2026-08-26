@@ -1,0 +1,426 @@
+{
+  "schema_version": "1",
+  "runs": [
+    {
+      "run_id": "2026-08-26-policy-pass",
+      "path": "2026-08-26-policy-pass/run.json",
+      "recorded_at": "2026-08-26T04:20:45Z",
+      "model": "policy/pass",
+      "backend": "policy",
+      "episodes": 10,
+      "primary_metric": "victory_progress",
+      "metrics": {
+        "victory_progress": {
+          "field": "victory_progress",
+          "mean": 0.7686,
+          "n": 10,
+          "episodes": 10
+        },
+        "extinction_progress": {
+          "field": "extinction_progress",
+          "mean": 0.0,
+          "n": 10,
+          "episodes": 10
+        },
+        "plague_score": {
+          "field": "plague_score",
+          "mean": 768.6,
+          "n": 10,
+          "episodes": 10
+        },
+        "affected_pct": {
+          "field": "affected_pct",
+          "mean": 76.86,
+          "n": 10,
+          "episodes": 10
+        },
+        "dead_pct": {
+          "field": "dead_pct",
+          "mean": 0.0,
+          "n": 10,
+          "episodes": 10
+        },
+        "days_to_infect_50pct": {
+          "field": "days_to_infect_50pct",
+          "mean": 447.44444444444446,
+          "n": 9,
+          "episodes": 10
+        }
+      },
+      "outcomes": {
+        "timeout": 10
+      },
+      "action_health": {
+        "accepted": 0,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 6000,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "wall_time_seconds": 68.3,
+      "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
+    },
+    {
+      "run_id": "2026-08-26-policy-random",
+      "path": "2026-08-26-policy-random/run.json",
+      "recorded_at": "2026-08-26T04:21:22Z",
+      "model": "policy/random",
+      "backend": "policy",
+      "episodes": 10,
+      "primary_metric": "victory_progress",
+      "metrics": {
+        "victory_progress": {
+          "field": "victory_progress",
+          "mean": 0.8618399999999999,
+          "n": 10,
+          "episodes": 10
+        },
+        "extinction_progress": {
+          "field": "extinction_progress",
+          "mean": 0.29102,
+          "n": 10,
+          "episodes": 10
+        },
+        "plague_score": {
+          "field": "plague_score",
+          "mean": 1138.584,
+          "n": 10,
+          "episodes": 10
+        },
+        "affected_pct": {
+          "field": "affected_pct",
+          "mean": 86.184,
+          "n": 10,
+          "episodes": 10
+        },
+        "dead_pct": {
+          "field": "dead_pct",
+          "mean": 27.647000000000002,
+          "n": 10,
+          "episodes": 10
+        },
+        "days_to_infect_50pct": {
+          "field": "days_to_infect_50pct",
+          "mean": 251.1,
+          "n": 10,
+          "episodes": 10
+        }
+      },
+      "outcomes": {
+        "cured": 10
+      },
+      "action_health": {
+        "accepted": 394,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 2891,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "wall_time_seconds": 35.7,
+      "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
+    },
+    {
+      "run_id": "2026-08-26-policy-greedy",
+      "path": "2026-08-26-policy-greedy/run.json",
+      "recorded_at": "2026-08-26T04:21:54Z",
+      "model": "policy/greedy",
+      "backend": "policy",
+      "episodes": 10,
+      "primary_metric": "victory_progress",
+      "metrics": {
+        "victory_progress": {
+          "field": "victory_progress",
+          "mean": 0.75719,
+          "n": 10,
+          "episodes": 10
+        },
+        "extinction_progress": {
+          "field": "extinction_progress",
+          "mean": 0.26103,
+          "n": 10,
+          "episodes": 10
+        },
+        "plague_score": {
+          "field": "plague_score",
+          "mean": 1005.4530000000001,
+          "n": 10,
+          "episodes": 10
+        },
+        "affected_pct": {
+          "field": "affected_pct",
+          "mean": 75.71900000000001,
+          "n": 10,
+          "episodes": 10
+        },
+        "dead_pct": {
+          "field": "dead_pct",
+          "mean": 24.8,
+          "n": 10,
+          "episodes": 10
+        },
+        "days_to_infect_50pct": {
+          "field": "days_to_infect_50pct",
+          "mean": 236.8,
+          "n": 10,
+          "episodes": 10
+        }
+      },
+      "outcomes": {
+        "cured": 10
+      },
+      "action_health": {
+        "accepted": 388,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 2520,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "wall_time_seconds": 30.9,
+      "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
+    },
+    {
+      "run_id": "2026-08-26-policy-expert",
+      "path": "2026-08-26-policy-expert/run.json",
+      "recorded_at": "2026-08-26T04:22:47Z",
+      "model": "policy/expert",
+      "backend": "policy",
+      "episodes": 10,
+      "primary_metric": "victory_progress",
+      "metrics": {
+        "victory_progress": {
+          "field": "victory_progress",
+          "mean": 0.9987,
+          "n": 10,
+          "episodes": 10
+        },
+        "extinction_progress": {
+          "field": "extinction_progress",
+          "mean": 0.53115,
+          "n": 10,
+          "episodes": 10
+        },
+        "plague_score": {
+          "field": "plague_score",
+          "mean": 1503.598,
+          "n": 10,
+          "episodes": 10
+        },
+        "affected_pct": {
+          "field": "affected_pct",
+          "mean": 99.87,
+          "n": 10,
+          "episodes": 10
+        },
+        "dead_pct": {
+          "field": "dead_pct",
+          "mean": 50.458,
+          "n": 10,
+          "episodes": 10
+        },
+        "days_to_infect_50pct": {
+          "field": "days_to_infect_50pct",
+          "mean": 243.0,
+          "n": 10,
+          "episodes": 10
+        }
+      },
+      "outcomes": {
+        "cured": 6,
+        "infected_all": 4
+      },
+      "action_health": {
+        "accepted": 413,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 3678,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "wall_time_seconds": 52.1,
+      "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
+    },
+    {
+      "run_id": "2026-08-26-ollama-llama3-2",
+      "path": "2026-08-26-ollama-llama3-2/run.json",
+      "recorded_at": "2026-08-26T04:59:17Z",
+      "model": "ollama/llama3.2",
+      "backend": "ollama",
+      "episodes": 10,
+      "primary_metric": "victory_progress",
+      "metrics": {
+        "victory_progress": {
+          "field": "victory_progress",
+          "mean": 0.83972,
+          "n": 10,
+          "episodes": 10
+        },
+        "extinction_progress": {
+          "field": "extinction_progress",
+          "mean": 0.24096,
+          "n": 10,
+          "episodes": 10
+        },
+        "plague_score": {
+          "field": "plague_score",
+          "mean": 1068.876,
+          "n": 10,
+          "episodes": 10
+        },
+        "affected_pct": {
+          "field": "affected_pct",
+          "mean": 83.97200000000001,
+          "n": 10,
+          "episodes": 10
+        },
+        "dead_pct": {
+          "field": "dead_pct",
+          "mean": 22.892,
+          "n": 10,
+          "episodes": 10
+        },
+        "days_to_infect_50pct": {
+          "field": "days_to_infect_50pct",
+          "mean": 235.8,
+          "n": 10,
+          "episodes": 10
+        }
+      },
+      "outcomes": {
+        "cured": 10
+      },
+      "action_health": {
+        "accepted": 386,
+        "rejected_unknown": 0,
+        "rejected_illegal": 5,
+        "passed": 0,
+        "auto_passed": 2695,
+        "unparsed": 0
+      },
+      "wall_time_seconds": 1822.8,
+      "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
+    },
+    {
+      "run_id": "2026-08-26-ollama-mistral-7b",
+      "path": "2026-08-26-ollama-mistral-7b/run.json",
+      "recorded_at": "2026-08-26T05:53:32Z",
+      "model": "ollama/mistral:7b",
+      "backend": "ollama",
+      "episodes": 10,
+      "primary_metric": "victory_progress",
+      "metrics": {
+        "victory_progress": {
+          "field": "victory_progress",
+          "mean": 0.73651,
+          "n": 10,
+          "episodes": 10
+        },
+        "extinction_progress": {
+          "field": "extinction_progress",
+          "mean": 0.21278000000000002,
+          "n": 10,
+          "episodes": 10
+        },
+        "plague_score": {
+          "field": "plague_score",
+          "mean": 938.9280000000001,
+          "n": 10,
+          "episodes": 10
+        },
+        "affected_pct": {
+          "field": "affected_pct",
+          "mean": 73.651,
+          "n": 10,
+          "episodes": 10
+        },
+        "dead_pct": {
+          "field": "dead_pct",
+          "mean": 20.214,
+          "n": 10,
+          "episodes": 10
+        },
+        "days_to_infect_50pct": {
+          "field": "days_to_infect_50pct",
+          "mean": 243.1,
+          "n": 10,
+          "episodes": 10
+        }
+      },
+      "outcomes": {
+        "cured": 10
+      },
+      "action_health": {
+        "accepted": 375,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 0,
+        "auto_passed": 2493,
+        "unparsed": 0
+      },
+      "wall_time_seconds": 3249.4,
+      "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
+    },
+    {
+      "run_id": "2026-08-26-ollama-gemma3-4b",
+      "path": "2026-08-26-ollama-gemma3-4b/run.json",
+      "recorded_at": "2026-08-26T06:50:29Z",
+      "model": "ollama/gemma3:4b",
+      "backend": "ollama",
+      "episodes": 10,
+      "primary_metric": "victory_progress",
+      "metrics": {
+        "victory_progress": {
+          "field": "victory_progress",
+          "mean": 0.86463,
+          "n": 10,
+          "episodes": 10
+        },
+        "extinction_progress": {
+          "field": "extinction_progress",
+          "mean": 0.30124,
+          "n": 10,
+          "episodes": 10
+        },
+        "plague_score": {
+          "field": "plague_score",
+          "mean": 1151.095,
+          "n": 10,
+          "episodes": 10
+        },
+        "affected_pct": {
+          "field": "affected_pct",
+          "mean": 86.463,
+          "n": 10,
+          "episodes": 10
+        },
+        "dead_pct": {
+          "field": "dead_pct",
+          "mean": 28.617,
+          "n": 10,
+          "episodes": 10
+        },
+        "days_to_infect_50pct": {
+          "field": "days_to_infect_50pct",
+          "mean": 222.3,
+          "n": 10,
+          "episodes": 10
+        }
+      },
+      "outcomes": {
+        "cured": 10
+      },
+      "action_health": {
+        "accepted": 393,
+        "rejected_unknown": 2,
+        "rejected_illegal": 103,
+        "passed": 0,
+        "auto_passed": 2634,
+        "unparsed": 0
+      },
+      "wall_time_seconds": 3411.5,
+      "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
+    }
+  ]
+}

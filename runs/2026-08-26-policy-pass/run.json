@@ -1,0 +1,507 @@
+{
+  "schema_version": "1",
+  "run_id": "2026-08-26-policy-pass",
+  "recorded_at": "2026-08-26T04:20:45Z",
+  "model": {
+    "id": "policy/pass",
+    "backend": "policy",
+    "name": "pass",
+    "description": "policy/pass (reference policy, not a language model)",
+    "details": {},
+    "api_key_env": null,
+    "base_url": null,
+    "host": null
+  },
+  "environment": {
+    "domain_id": "plague-sim",
+    "domain_name": "Plague Sim",
+    "binding_vow_version": "1.0.0",
+    "primary_metric": "victory_progress",
+    "manifest_sha256": "c89685176d776738ae854e2b2c7fec6746f76755540ff4d37a27354fbdfc1153",
+    "git": {
+      "sha": "0f2a232970548871f632029bd2a5e71d8a8db880",
+      "dirty": false
+    }
+  },
+  "protocol": {
+    "seeds": [
+      "India",
+      "China",
+      "USA",
+      "Brazil",
+      "Egypt",
+      "Russia",
+      "Australia",
+      "Madagascar",
+      "Germany",
+      "Indonesia"
+    ],
+    "episodes_requested": 10,
+    "max_steps": 600,
+    "history": 8,
+    "skip_idle": true,
+    "temperature": 0.0,
+    "max_tokens": 1024,
+    "effort": "medium",
+    "thinking": "adaptive",
+    "ollama_think": "auto",
+    "retries": 2,
+    "rng_seed": null,
+    "system_prompt": "You are the agent in the 'Plague Sim' benchmark environment.\nInfect and kill as much of humanity as possible before the cure completes. The agent plays the disease, evolving traits by spending DNA points.\n\nThe agent controls a disease spreading across 71 countries. Each step it may evolve one trait (spending DNA points), devolve one it already owns for a small refund, or pass (null action). The simulation runs for up to 600 days. Maximise (infected + dead) fraction while slowing the cure.\n\nOBSERVATION FIELDS\n- day: Simulation day, 1-600.\n- dna: DNA available to spend right now.\n- dna_earned: Lifetime DNA granted this episode. Income is a ratchet on cumulative progress (new countries infected, infection and death milestones), not a rate, so it is bounded by the size of the world rather than by episode length.\n- cure_progress: Cure fraction in [0, 1]. At 1.0 the episode ends as 'cured'.\n- infected_pct: Percentage of world population currently infected.\n- dead_pct: Percentage of world population dead.\n- victory_progress: (infected + dead) / population, in [0, 1]. The primary metric; 1.0 is the 'infected_all' win.\n- countries_infected: Number of the 71 countries with at least one infection.\n- evolved_traits: Trait IDs currently evolved.\n- devolve_options: Trait IDs that 'devolve:<trait_id>' will accept. Evolved traits minus the one-time-use ReShuffle traits, which are locked in once bought.\n- available_traits: Trait IDs that can be evolved right now: prereqs met and cost <= dna.\n- action_hint: Plain-language restatement of the legal actions this turn.\n\nTRAIT TREES\n- transmission: Boosts infectivity and spread routes (air, water, birds, insects, animals).\n- symptom: Raises severity/lethality; speeds up cure research.\n- ability: Defensive: drug/climate resistance, genetic hardening, cure reshuffles.\n\nACTION RULES\n- action must be a key from observation.available_traits, the string 'devolve:<trait_id>', or null.\n- Evolve: action is a trait_id from observation.available_traits. Ignored if invalid, prereqs unmet, or insufficient DNA.\n- Devolve: action is 'devolve:<trait_id>' where trait_id is in observation.devolve_options. Refunds a flat 2 DNA. Only that single trait is removed \u2014 dependent traits are NOT removed. Cure rollbacks from reshuffle traits are NOT reversed.\n- One-time-use traits cannot be devolved: the three GeneticReShuffle traits roll the cure back once each, and are locked in once bought so the rollback cannot be recycled. They appear in evolved_traits but never in devolve_options; a devolve action naming one is rejected.\n- null (or omitted) action is a valid strategy \u2014 it advances the simulation one day without spending DNA, allowing DNA to accumulate from ongoing infections and deaths.\n- Each step is exactly one simulation day.\n\nREWARD: infected_fraction + dead_fraction * 2.0 - cure_progress * 0.5. Theoretical max ~3.0 (all dead, cure at 0%).\nSCORING: ranked by victory_progress. Ranked by victory_progress desc, then dead_pct desc, then days_to_infect_50pct asc.\n\nEach turn, reply in exactly this format and nothing else:\nREASON: <one short sentence>\nACTION: <trait_id from available_traits | devolve:<trait_id> | null>\n\nACTION must be a bare trait id with no quotes or punctuation. Use null to bank DNA for a more expensive trait later \u2014 it is a legitimate move, not a wasted turn.",
+    "system_prompt_sha256": "3b22519827d6dab15e6a47a6ac7e54ee6148ab942614888784ec6d0e9d6bc700"
+  },
+  "result": {
+    "episodes_completed": 10,
+    "stopped": null,
+    "wall_time_seconds": 68.3,
+    "metrics": {
+      "victory_progress": {
+        "field": "victory_progress",
+        "mean": 0.7686,
+        "n": 10,
+        "episodes": 10
+      },
+      "extinction_progress": {
+        "field": "extinction_progress",
+        "mean": 0.0,
+        "n": 10,
+        "episodes": 10
+      },
+      "plague_score": {
+        "field": "plague_score",
+        "mean": 768.6,
+        "n": 10,
+        "episodes": 10
+      },
+      "affected_pct": {
+        "field": "affected_pct",
+        "mean": 76.86,
+        "n": 10,
+        "episodes": 10
+      },
+      "dead_pct": {
+        "field": "dead_pct",
+        "mean": 0.0,
+        "n": 10,
+        "episodes": 10
+      },
+      "days_to_infect_50pct": {
+        "field": "days_to_infect_50pct",
+        "mean": 447.44444444444446,
+        "n": 9,
+        "episodes": 10
+      }
+    },
+    "outcomes": {
+      "timeout": 10
+    },
+    "action_health": {
+      "accepted": 0,
+      "rejected_unknown": 0,
+      "rejected_illegal": 0,
+      "passed": 6000,
+      "auto_passed": 0,
+      "unparsed": 0
+    },
+    "usage": {
+      "calls": 0,
+      "tokens_in": 0,
+      "tokens_out": 0,
+      "tokens_cached": 0,
+      "days_auto_passed": 0,
+      "estimated_cost_usd": null
+    }
+  },
+  "episodes": [
+    {
+      "seed": "India",
+      "rng_seed": "India",
+      "steps": 600,
+      "done": true,
+      "truncated": null,
+      "wall_time_seconds": 5.9,
+      "usage": {
+        "calls": 0,
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "tokens_cached": 0
+      },
+      "action_health": {
+        "accepted": 0,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 600,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "terminal_info": {
+        "outcome": "timeout",
+        "day": 600,
+        "victory_progress": 0.8539,
+        "extinction_progress": 0.0,
+        "plague_score": 853.91,
+        "infected_pct": 85.39,
+        "dead_pct": 0.0,
+        "affected_pct": 85.39,
+        "cure_progress_pct": 70.95,
+        "countries_infected": 71,
+        "total_countries": 71,
+        "traits_evolved": [],
+        "days_to_infect_25pct": 277,
+        "days_to_infect_50pct": 366,
+        "days_to_infect_75pct": 480
+      }
+    },
+    {
+      "seed": "China",
+      "rng_seed": "China",
+      "steps": 600,
+      "done": true,
+      "truncated": null,
+      "wall_time_seconds": 6.6,
+      "usage": {
+        "calls": 0,
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "tokens_cached": 0
+      },
+      "action_health": {
+        "accepted": 0,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 600,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "terminal_info": {
+        "outcome": "timeout",
+        "day": 600,
+        "victory_progress": 0.8597,
+        "extinction_progress": 0.0,
+        "plague_score": 859.67,
+        "infected_pct": 85.97,
+        "dead_pct": 0.0,
+        "affected_pct": 85.97,
+        "cure_progress_pct": 72.42,
+        "countries_infected": 71,
+        "total_countries": 71,
+        "traits_evolved": [],
+        "days_to_infect_25pct": 275,
+        "days_to_infect_50pct": 364,
+        "days_to_infect_75pct": 476
+      }
+    },
+    {
+      "seed": "USA",
+      "rng_seed": "USA",
+      "steps": 600,
+      "done": true,
+      "truncated": null,
+      "wall_time_seconds": 7.1,
+      "usage": {
+        "calls": 0,
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "tokens_cached": 0
+      },
+      "action_health": {
+        "accepted": 0,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 600,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "terminal_info": {
+        "outcome": "timeout",
+        "day": 600,
+        "victory_progress": 0.8124,
+        "extinction_progress": 0.0,
+        "plague_score": 812.36,
+        "infected_pct": 81.24,
+        "dead_pct": 0.0,
+        "affected_pct": 81.24,
+        "cure_progress_pct": 68.27,
+        "countries_infected": 71,
+        "total_countries": 71,
+        "traits_evolved": [],
+        "days_to_infect_25pct": 373,
+        "days_to_infect_50pct": 448,
+        "days_to_infect_75pct": 545
+      }
+    },
+    {
+      "seed": "Brazil",
+      "rng_seed": "Brazil",
+      "steps": 600,
+      "done": true,
+      "truncated": null,
+      "wall_time_seconds": 6.7,
+      "usage": {
+        "calls": 0,
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "tokens_cached": 0
+      },
+      "action_health": {
+        "accepted": 0,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 600,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "terminal_info": {
+        "outcome": "timeout",
+        "day": 600,
+        "victory_progress": 0.7906,
+        "extinction_progress": 0.0,
+        "plague_score": 790.59,
+        "infected_pct": 79.06,
+        "dead_pct": 0.0,
+        "affected_pct": 79.06,
+        "cure_progress_pct": 66.53,
+        "countries_infected": 71,
+        "total_countries": 71,
+        "traits_evolved": [],
+        "days_to_infect_25pct": 390,
+        "days_to_infect_50pct": 468,
+        "days_to_infect_75pct": 567
+      }
+    },
+    {
+      "seed": "Egypt",
+      "rng_seed": "Egypt",
+      "steps": 600,
+      "done": true,
+      "truncated": null,
+      "wall_time_seconds": 7.3,
+      "usage": {
+        "calls": 0,
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "tokens_cached": 0
+      },
+      "action_health": {
+        "accepted": 0,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 600,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "terminal_info": {
+        "outcome": "timeout",
+        "day": 600,
+        "victory_progress": 0.7602,
+        "extinction_progress": 0.0,
+        "plague_score": 760.23,
+        "infected_pct": 76.02,
+        "dead_pct": 0.0,
+        "affected_pct": 76.02,
+        "cure_progress_pct": 60.98,
+        "countries_infected": 71,
+        "total_countries": 71,
+        "traits_evolved": [],
+        "days_to_infect_25pct": 423,
+        "days_to_infect_50pct": 502,
+        "days_to_infect_75pct": 595
+      }
+    },
+    {
+      "seed": "Russia",
+      "rng_seed": "Russia",
+      "steps": 600,
+      "done": true,
+      "truncated": null,
+      "wall_time_seconds": 7.1,
+      "usage": {
+        "calls": 0,
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "tokens_cached": 0
+      },
+      "action_health": {
+        "accepted": 0,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 600,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "terminal_info": {
+        "outcome": "timeout",
+        "day": 600,
+        "victory_progress": 0.8255,
+        "extinction_progress": 0.0,
+        "plague_score": 825.52,
+        "infected_pct": 82.55,
+        "dead_pct": 0.0,
+        "affected_pct": 82.55,
+        "cure_progress_pct": 70.19,
+        "countries_infected": 71,
+        "total_countries": 71,
+        "traits_evolved": [],
+        "days_to_infect_25pct": 343,
+        "days_to_infect_50pct": 425,
+        "days_to_infect_75pct": 531
+      }
+    },
+    {
+      "seed": "Australia",
+      "rng_seed": "Australia",
+      "steps": 600,
+      "done": true,
+      "truncated": null,
+      "wall_time_seconds": 6.9,
+      "usage": {
+        "calls": 0,
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "tokens_cached": 0
+      },
+      "action_health": {
+        "accepted": 0,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 600,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "terminal_info": {
+        "outcome": "timeout",
+        "day": 600,
+        "victory_progress": 0.7603,
+        "extinction_progress": 0.0,
+        "plague_score": 760.31,
+        "infected_pct": 76.03,
+        "dead_pct": 0.0,
+        "affected_pct": 76.03,
+        "cure_progress_pct": 62.4,
+        "countries_infected": 71,
+        "total_countries": 71,
+        "traits_evolved": [],
+        "days_to_infect_25pct": 419,
+        "days_to_infect_50pct": 492,
+        "days_to_infect_75pct": 593
+      }
+    },
+    {
+      "seed": "Madagascar",
+      "rng_seed": "Madagascar",
+      "steps": 600,
+      "done": true,
+      "truncated": null,
+      "wall_time_seconds": 6.7,
+      "usage": {
+        "calls": 0,
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "tokens_cached": 0
+      },
+      "action_health": {
+        "accepted": 0,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 600,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "terminal_info": {
+        "outcome": "timeout",
+        "day": 600,
+        "victory_progress": 0.4804,
+        "extinction_progress": 0.0,
+        "plague_score": 480.41,
+        "infected_pct": 48.04,
+        "dead_pct": 0.0,
+        "affected_pct": 48.04,
+        "cure_progress_pct": 44.81,
+        "countries_infected": 71,
+        "total_countries": 71,
+        "traits_evolved": [],
+        "days_to_infect_25pct": 515,
+        "days_to_infect_50pct": null,
+        "days_to_infect_75pct": null
+      }
+    },
+    {
+      "seed": "Germany",
+      "rng_seed": "Germany",
+      "steps": 600,
+      "done": true,
+      "truncated": null,
+      "wall_time_seconds": 6.9,
+      "usage": {
+        "calls": 0,
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "tokens_cached": 0
+      },
+      "action_health": {
+        "accepted": 0,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 600,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "terminal_info": {
+        "outcome": "timeout",
+        "day": 600,
+        "victory_progress": 0.7534,
+        "extinction_progress": 0.0,
+        "plague_score": 753.38,
+        "infected_pct": 75.34,
+        "dead_pct": 0.0,
+        "affected_pct": 75.34,
+        "cure_progress_pct": 68.16,
+        "countries_infected": 71,
+        "total_countries": 71,
+        "traits_evolved": [],
+        "days_to_infect_25pct": 420,
+        "days_to_infect_50pct": 497,
+        "days_to_infect_75pct": 598
+      }
+    },
+    {
+      "seed": "Indonesia",
+      "rng_seed": "Indonesia",
+      "steps": 600,
+      "done": true,
+      "truncated": null,
+      "wall_time_seconds": 7.0,
+      "usage": {
+        "calls": 0,
+        "tokens_in": 0,
+        "tokens_out": 0,
+        "tokens_cached": 0
+      },
+      "action_health": {
+        "accepted": 0,
+        "rejected_unknown": 0,
+        "rejected_illegal": 0,
+        "passed": 600,
+        "auto_passed": 0,
+        "unparsed": 0
+      },
+      "terminal_info": {
+        "outcome": "timeout",
+        "day": 600,
+        "victory_progress": 0.7896,
+        "extinction_progress": 0.0,
+        "plague_score": 789.62,
+        "infected_pct": 78.96,
+        "dead_pct": 0.0,
+        "affected_pct": 78.96,
+        "cure_progress_pct": 64.97,
+        "countries_infected": 71,
+        "total_countries": 71,
+        "traits_evolved": [],
+        "days_to_infect_25pct": 389,
+        "days_to_infect_50pct": 465,
+        "days_to_infect_75pct": 567
+      }
+    }
+  ]
+}
