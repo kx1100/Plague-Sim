@@ -42,8 +42,10 @@ git SHA. `--no-save` turns that off; see tools/run_store.py.
 
 import argparse
 import json
+import math
 import os
 import random
+import statistics
 import sys
 import time
 import urllib.error
@@ -816,12 +818,54 @@ def _incomplete_score(turns: list[dict]) -> dict:
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
+# Two-sided 95% critical values of Student's t, by degrees of freedom. A ten
+# seed sweep has df=9, where the normal 1.96 understates the interval by about
+# 15% -- the difference between two models reading as tied and reading as
+# ranked. Past df=30 the gap stops mattering and 1.96 is used.
+_T95 = {
+    1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365,
+    8: 2.306, 9: 2.262, 10: 2.228, 11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145,
+    15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086,
+    21: 2.080, 22: 2.074, 23: 2.069, 24: 2.064, 25: 2.060, 26: 2.056,
+    27: 2.052, 28: 2.048, 29: 2.045, 30: 2.042,
+}
+
+
+def _spread(values: list[float]) -> dict:
+    """
+    The sample spread across seeds, and the 95% interval around the mean.
+
+    A bare mean invites the one error this benchmark cannot afford: reading a
+    0.003 gap between two models as a ranking. Ten seeds is a small sample and
+    the per-seed scores are far apart, so the interval is wide, and two models
+    whose intervals overlap have not been told apart by the run. That belongs
+    in the record itself -- a reader comparing two published runs will not
+    recompute it from the episode list, so a mean published alone will be
+    compared as though it were exact.
+    """
+    n = len(values)
+    if n < 2:
+        # One episode has a mean but no spread. None, not 0.0, which would read
+        # as a model that scored identically every time.
+        return {"sd": None, "sem": None, "ci95": None}
+    mean = sum(values) / n
+    sd = statistics.stdev(values)
+    sem = sd / math.sqrt(n)
+    half = _T95.get(n - 1, 1.96) * sem
+    return {
+        "sd": round(sd, 6),
+        "sem": round(sem, 6),
+        "ci95": [round(mean - half, 6), round(mean + half, 6)],
+    }
+
+
 def metric_means(manifest: dict, episodes: list[dict]) -> dict[str, dict]:
     """
     Mean of each terminal_field metric named in the manifest, with the count it
-    was taken over. `n` below `episodes` means some episode did not report the
-    field -- a budget-stopped one, usually -- and a reader must see that rather
-    than a mean quietly taken over fewer runs than it claims.
+    was taken over and the spread around it. `n` below `episodes` means some
+    episode did not report the field -- a budget-stopped one, usually -- and a
+    reader must see that rather than a mean quietly taken over fewer runs than
+    it claims.
     """
     means = {}
     for metric in manifest["scoring"]["metrics"]:
@@ -835,6 +879,7 @@ def metric_means(manifest: dict, episodes: list[dict]) -> dict[str, dict]:
         means[metric["name"]] = {
             "field": field,
             "mean": sum(values) / len(values) if values else None,
+            **_spread(values),
             "n": len(values),
             "episodes": len(episodes),
         }
@@ -842,14 +887,19 @@ def metric_means(manifest: dict, episodes: list[dict]) -> dict[str, dict]:
 
 
 def aggregate(manifest: dict, episodes: list[dict]) -> list[tuple[str, str]]:
-    """The same means, formatted for the terminal."""
+    """The same means, formatted for the terminal -- each beside the spread
+    that says whether it can be told apart from the next model's."""
     rows = []
     for name, stat in metric_means(manifest, episodes).items():
         if stat["mean"] is None:
             rows.append((name, "n/a"))
             continue
         note = "" if stat["n"] == stat["episodes"] else f"  (n={stat['n']})"
-        rows.append((name, f"{stat['mean']:.4f}{note}"))
+        spread = ""
+        if stat["ci95"]:
+            low, high = stat["ci95"]
+            spread = f"  sd {stat['sd']:.4f}   95% CI [{low:.4f}, {high:.4f}]"
+        rows.append((name, f"{stat['mean']:.4f}{spread}{note}"))
     return rows
 
 
@@ -862,12 +912,55 @@ def outcome_counts(episodes: list[dict]) -> dict[str, int]:
 
 
 def health_totals(episodes: list[dict]) -> dict[str, int]:
+    """
+    Sum the per-episode counters. Only the integer counters: a health block
+    read back off disk also carries the derived `rates`, and re-aggregating a
+    saved run -- comparing two published records, say -- is a normal thing to
+    do, so summing must not choke on a value that is not a tally.
+    """
     total = dict(accepted=0, rejected_unknown=0, rejected_illegal=0,
                  passed=0, auto_passed=0, unparsed=0)
     for ep in episodes:
         for key, value in (ep.get("health") or {}).items():
+            if isinstance(value, bool) or not isinstance(value, int):
+                continue
             total[key] = total.get(key, 0) + value
     return total
+
+
+def health_rates(total: dict[str, int]) -> dict:
+    """
+    The rejection counts as proportions of what the model actually attempted.
+
+    A rejected move is a move the environment threw away, so a model with a
+    fifth of its actions rejected only really played four turns in five --
+    the rest of its score is whatever the simulation did unattended. The raw
+    counts do not show that on their own: `103 illegal` means something very
+    different beside 393 accepted than beside 3900, and a reader comparing two
+    published runs should not have to do the division to find out which they
+    are looking at.
+    """
+    rejected = total["rejected_unknown"] + total["rejected_illegal"]
+    attempted = total["accepted"] + rejected
+    if not attempted:
+        # A run of pure passes -- the reference `pass` policy, say. No move was
+        # attempted, so there is no rate; 0.0 would claim a clean record.
+        return {"attempted": 0, "rejected": rejected, "rejected_rate": None,
+                "illegal_rate": None, "unreadable_rate": None}
+    return {
+        "attempted": attempted,
+        "rejected": rejected,
+        "rejected_rate": round(rejected / attempted, 4),
+        "illegal_rate": round(total["rejected_illegal"] / attempted, 4),
+        "unreadable_rate": round(total["rejected_unknown"] / attempted, 4),
+    }
+
+
+def health_with_rates(episodes: list[dict]) -> dict:
+    """The counts the record stores, with the rates alongside them. Nested so
+    that `health_totals` stays a pure sum of integers."""
+    total = health_totals(episodes)
+    return {**total, "rates": health_rates(total)}
 
 
 def action_health(episodes: list[dict]) -> tuple[str, str | None]:
@@ -879,10 +972,13 @@ def action_health(episodes: list[dict]) -> tuple[str, str | None]:
     """
     total = health_totals(episodes)
 
-    rejected = total["rejected_unknown"] + total["rejected_illegal"]
-    attempted = total["accepted"] + rejected
+    rates = health_rates(total)
+    rejected, attempted = rates["rejected"], rates["attempted"]
+    # The share, not just the count: it is the figure that says how much of the
+    # score below was actually played.
+    share = "" if rates["rejected_rate"] is None else f" — {rates['rejected_rate']:.0%} of attempted"
     line = (
-        f"{total['accepted']} accepted, {rejected} rejected "
+        f"{total['accepted']} accepted, {rejected} rejected{share} "
         f"({total['rejected_illegal']} illegal moves, "
         f"{total['rejected_unknown']} unreadable), "
         f"{total['passed']} passed, {total['auto_passed']} auto-passed"
@@ -979,7 +1075,24 @@ def _display_path(path: Path) -> str:
         return str(path)
 
 
+def _force_utf8_output() -> None:
+    """
+    Windows hands a redirected run the cp1252 codepage, and the summary prints
+    `→`, `±` and box-drawing characters. Piping a sweep to a log file therefore
+    dies on the first episode summary with UnicodeEncodeError -- after the
+    episode has been played and paid for, and before anything is written to
+    `runs/`. The one place that is worth guarding is a paid sweep someone
+    sensibly decided to keep a log of.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass                            # already UTF-8, or not reconfigurable
+
+
 def main() -> int:
+    _force_utf8_output()
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -1153,7 +1266,7 @@ def main() -> int:
             budget=budget,
             metrics=metric_means(manifest, episodes),
             outcomes=outcomes,
-            health=health_totals(episodes),
+            health=health_with_rates(episodes),
             wall_time=elapsed,
             model_provenance=agent.provenance(),
             stopped=stopped,

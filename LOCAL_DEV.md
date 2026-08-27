@@ -98,16 +98,39 @@ A tripped guard stops the run and still reports the episodes that finished.
 
 ### Reading the output
 
-Every run reports what the model's turns actually did:
+Every run reports what the model's turns actually did, as counts and as a share
+of what it attempted:
 
 ```
-actions  : 118 accepted, 3 rejected, 6 passed, 771 auto-passed
+actions  : 118 accepted, 3 rejected — 2% of attempted (3 illegal moves, 0 unreadable), 6 passed, 771 auto-passed
 ```
 
-If more than a quarter of attempted actions are rejected, the run says so — a
-score built on rejected actions measures the reply parser, not the model. Empty
-replies are called out separately, because that is what a truncated reasoning
-model looks like from here.
+The share is the number that matters, because `103 illegal` reads very
+differently beside 393 accepted than beside 3900. A rejected move is one the
+environment threw away, so a model rejecting a fifth of its actions only played
+four turns in five — the rest of its score is the simulation running unattended.
+
+Illegal moves and unreadable replies are counted separately on purpose. An
+**illegal** move is the model naming a trait it cannot currently afford or
+reach: that is bad play, and it is a result, so it never raises a warning.
+An **unreadable** reply is one the parser could not turn into a trait ID at
+all, which implicates the harness rather than the model — above 10% the run
+says so. Empty replies are called out separately again, because that is what a
+truncated reasoning model looks like from here.
+
+The metrics below the actions line each carry their spread:
+
+```
+  victory_progress      0.8646  sd 0.0441   95% CI [0.8331, 0.8962] <- primary
+```
+
+Ten seeds is a small sample, so the interval is wide, and it is the only honest
+way to compare two models: **overlapping intervals mean the run did not tell
+them apart**, however far apart the means look. The interval uses Student's t
+rather than the normal 1.96 — at ten seeds that is a 15% difference, which is
+exactly the margin that turns a tie into an apparent ranking. All of this is
+stored in `run.json` as well (`sd`, `sem`, `ci95`, and `action_health.rates`),
+so a published record can be read correctly without recomputing anything.
 
 **Thinking models need room.** `qwen3` and friends put their reasoning in a
 separate field, and Ollama's token budget covers reasoning *and* the answer — so

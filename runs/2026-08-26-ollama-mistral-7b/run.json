@@ -66,36 +66,72 @@
       "victory_progress": {
         "field": "victory_progress",
         "mean": 0.73651,
+        "sd": 0.077587,
+        "sem": 0.024535,
+        "ci95": [
+          0.681011,
+          0.792009
+        ],
         "n": 10,
         "episodes": 10
       },
       "extinction_progress": {
         "field": "extinction_progress",
         "mean": 0.21278000000000002,
+        "sd": 0.059497,
+        "sem": 0.018814,
+        "ci95": [
+          0.170222,
+          0.255338
+        ],
         "n": 10,
         "episodes": 10
       },
       "plague_score": {
         "field": "plague_score",
         "mean": 938.9280000000001,
+        "sd": 128.930368,
+        "sem": 40.771362,
+        "ci95": [
+          846.703179,
+          1031.152821
+        ],
         "n": 10,
         "episodes": 10
       },
       "affected_pct": {
         "field": "affected_pct",
         "mean": 73.651,
+        "sd": 7.758741,
+        "sem": 2.453529,
+        "ci95": [
+          68.101117,
+          79.200883
+        ],
         "n": 10,
         "episodes": 10
       },
       "dead_pct": {
         "field": "dead_pct",
         "mean": 20.214,
+        "sd": 5.652546,
+        "sem": 1.787492,
+        "ci95": [
+          16.170693,
+          24.257307
+        ],
         "n": 10,
         "episodes": 10
       },
       "days_to_infect_50pct": {
         "field": "days_to_infect_50pct",
         "mean": 243.1,
+        "sd": 21.768734,
+        "sem": 6.883878,
+        "ci95": [
+          227.528668,
+          258.671332
+        ],
         "n": 10,
         "episodes": 10
       }
@@ -109,7 +145,14 @@
       "rejected_illegal": 0,
       "passed": 0,
       "auto_passed": 2493,
-      "unparsed": 0
+      "unparsed": 0,
+      "rates": {
+        "attempted": 375,
+        "rejected": 0,
+        "rejected_rate": 0.0,
+        "illegal_rate": 0.0,
+        "unreadable_rate": 0.0
+      }
     },
     "usage": {
       "calls": 375,
@@ -140,7 +183,14 @@
         "rejected_illegal": 0,
         "passed": 0,
         "auto_passed": 231,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 39,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "terminal_info": {
         "outcome": "cured",
@@ -219,7 +269,14 @@
         "rejected_illegal": 0,
         "passed": 0,
         "auto_passed": 222,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 36,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "terminal_info": {
         "outcome": "cured",
@@ -295,7 +352,14 @@
         "rejected_illegal": 0,
         "passed": 0,
         "auto_passed": 234,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 36,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "terminal_info": {
         "outcome": "cured",
@@ -371,7 +435,14 @@
         "rejected_illegal": 0,
         "passed": 0,
         "auto_passed": 228,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 36,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "terminal_info": {
         "outcome": "cured",
@@ -447,7 +518,14 @@
         "rejected_illegal": 0,
         "passed": 0,
         "auto_passed": 285,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 41,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "terminal_info": {
         "outcome": "cured",
@@ -528,7 +606,14 @@
         "rejected_illegal": 0,
         "passed": 0,
         "auto_passed": 240,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 35,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "terminal_info": {
         "outcome": "cured",
@@ -603,7 +688,14 @@
         "rejected_illegal": 0,
         "passed": 0,
         "auto_passed": 266,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 38,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "terminal_info": {
         "outcome": "cured",
@@ -681,7 +773,14 @@
         "rejected_illegal": 0,
         "passed": 0,
         "auto_passed": 285,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 40,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "terminal_info": {
         "outcome": "cured",
@@ -761,7 +860,14 @@
         "rejected_illegal": 0,
         "passed": 0,
         "auto_passed": 246,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 35,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "terminal_info": {
         "outcome": "cured",
@@ -836,7 +942,14 @@
         "rejected_illegal": 0,
         "passed": 0,
         "auto_passed": 256,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 39,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "terminal_info": {
         "outcome": "cured",

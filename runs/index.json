@@ -13,36 +13,72 @@
         "victory_progress": {
           "field": "victory_progress",
           "mean": 0.7686,
+          "sd": 0.108057,
+          "sem": 0.034171,
+          "ci95": [
+            0.691306,
+            0.845894
+          ],
           "n": 10,
           "episodes": 10
         },
         "extinction_progress": {
           "field": "extinction_progress",
           "mean": 0.0,
+          "sd": 0.0,
+          "sem": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
           "n": 10,
           "episodes": 10
         },
         "plague_score": {
           "field": "plague_score",
           "mean": 768.6,
+          "sd": 108.051259,
+          "sem": 34.168808,
+          "ci95": [
+            691.310156,
+            845.889844
+          ],
           "n": 10,
           "episodes": 10
         },
         "affected_pct": {
           "field": "affected_pct",
           "mean": 76.86,
+          "sd": 10.805661,
+          "sem": 3.41705,
+          "ci95": [
+            69.130633,
+            84.589367
+          ],
           "n": 10,
           "episodes": 10
         },
         "dead_pct": {
           "field": "dead_pct",
           "mean": 0.0,
+          "sd": 0.0,
+          "sem": 0.0,
+          "ci95": [
+            0.0,
+            0.0
+          ],
           "n": 10,
           "episodes": 10
         },
         "days_to_infect_50pct": {
           "field": "days_to_infect_50pct",
           "mean": 447.44444444444446,
+          "sd": 52.735451,
+          "sem": 17.578484,
+          "ci95": [
+            406.908461,
+            487.980428
+          ],
           "n": 9,
           "episodes": 10
         }
@@ -56,7 +92,14 @@
         "rejected_illegal": 0,
         "passed": 6000,
         "auto_passed": 0,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 0,
+          "rejected": 0,
+          "rejected_rate": null,
+          "illegal_rate": null,
+          "unreadable_rate": null
+        }
       },
       "wall_time_seconds": 68.3,
       "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
@@ -73,36 +116,72 @@
         "victory_progress": {
           "field": "victory_progress",
           "mean": 0.8618399999999999,
+          "sd": 0.055558,
+          "sem": 0.017569,
+          "ci95": [
+            0.822099,
+            0.901581
+          ],
           "n": 10,
           "episodes": 10
         },
         "extinction_progress": {
           "field": "extinction_progress",
           "mean": 0.29102,
+          "sd": 0.081602,
+          "sem": 0.025805,
+          "ci95": [
+            0.232649,
+            0.349391
+          ],
           "n": 10,
           "episodes": 10
         },
         "plague_score": {
           "field": "plague_score",
           "mean": 1138.584,
+          "sd": 126.199191,
+          "sem": 39.907688,
+          "ci95": [
+            1048.31281,
+            1228.85519
+          ],
           "n": 10,
           "episodes": 10
         },
         "affected_pct": {
           "field": "affected_pct",
           "mean": 86.184,
+          "sd": 5.55575,
+          "sem": 1.756882,
+          "ci95": [
+            82.209932,
+            90.158068
+          ],
           "n": 10,
           "episodes": 10
         },
         "dead_pct": {
           "field": "dead_pct",
           "mean": 27.647000000000002,
+          "sd": 7.751589,
+          "sem": 2.451268,
+          "ci95": [
+            22.102232,
+            33.191768
+          ],
           "n": 10,
           "episodes": 10
         },
         "days_to_infect_50pct": {
           "field": "days_to_infect_50pct",
           "mean": 251.1,
+          "sd": 30.827297,
+          "sem": 9.748447,
+          "ci95": [
+            229.049013,
+            273.150987
+          ],
           "n": 10,
           "episodes": 10
         }
@@ -116,7 +195,14 @@
         "rejected_illegal": 0,
         "passed": 2891,
         "auto_passed": 0,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 394,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "wall_time_seconds": 35.7,
       "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
@@ -133,36 +219,72 @@
         "victory_progress": {
           "field": "victory_progress",
           "mean": 0.75719,
+          "sd": 0.085022,
+          "sem": 0.026886,
+          "ci95": [
+            0.696373,
+            0.818007
+          ],
           "n": 10,
           "episodes": 10
         },
         "extinction_progress": {
           "field": "extinction_progress",
           "mean": 0.26103,
+          "sd": 0.063721,
+          "sem": 0.02015,
+          "ci95": [
+            0.21545,
+            0.30661
+          ],
           "n": 10,
           "episodes": 10
         },
         "plague_score": {
           "field": "plague_score",
           "mean": 1005.4530000000001,
+          "sd": 142.08006,
+          "sem": 44.92966,
+          "ci95": [
+            903.822109,
+            1107.083891
+          ],
           "n": 10,
           "episodes": 10
         },
         "affected_pct": {
           "field": "affected_pct",
           "mean": 75.71900000000001,
+          "sd": 8.502186,
+          "sem": 2.688627,
+          "ci95": [
+            69.637325,
+            81.800675
+          ],
           "n": 10,
           "episodes": 10
         },
         "dead_pct": {
           "field": "dead_pct",
           "mean": 24.8,
+          "sd": 6.054354,
+          "sem": 1.914555,
+          "ci95": [
+            20.469277,
+            29.130723
+          ],
           "n": 10,
           "episodes": 10
         },
         "days_to_infect_50pct": {
           "field": "days_to_infect_50pct",
           "mean": 236.8,
+          "sd": 30.745551,
+          "sem": 9.722597,
+          "ci95": [
+            214.807486,
+            258.792514
+          ],
           "n": 10,
           "episodes": 10
         }
@@ -176,7 +298,14 @@
         "rejected_illegal": 0,
         "passed": 2520,
         "auto_passed": 0,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 388,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "wall_time_seconds": 30.9,
       "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
@@ -193,36 +322,72 @@
         "victory_progress": {
           "field": "victory_progress",
           "mean": 0.9987,
+          "sd": 0.000573,
+          "sem": 0.000181,
+          "ci95": [
+            0.99829,
+            0.99911
+          ],
           "n": 10,
           "episodes": 10
         },
         "extinction_progress": {
           "field": "extinction_progress",
           "mean": 0.53115,
+          "sd": 0.028454,
+          "sem": 0.008998,
+          "ci95": [
+            0.510797,
+            0.551503
+          ],
           "n": 10,
           "episodes": 10
         },
         "plague_score": {
           "field": "plague_score",
           "mean": 1503.598,
+          "sd": 26.954951,
+          "sem": 8.523904,
+          "ci95": [
+            1484.316929,
+            1522.879071
+          ],
           "n": 10,
           "episodes": 10
         },
         "affected_pct": {
           "field": "affected_pct",
           "mean": 99.87,
+          "sd": 0.057349,
+          "sem": 0.018135,
+          "ci95": [
+            99.828978,
+            99.911022
+          ],
           "n": 10,
           "episodes": 10
         },
         "dead_pct": {
           "field": "dead_pct",
           "mean": 50.458,
+          "sd": 2.703548,
+          "sem": 0.854937,
+          "ci95": [
+            48.524132,
+            52.391868
+          ],
           "n": 10,
           "episodes": 10
         },
         "days_to_infect_50pct": {
           "field": "days_to_infect_50pct",
           "mean": 243.0,
+          "sd": 30.254476,
+          "sem": 9.567305,
+          "ci95": [
+            221.358755,
+            264.641245
+          ],
           "n": 10,
           "episodes": 10
         }
@@ -237,7 +402,14 @@
         "rejected_illegal": 0,
         "passed": 3678,
         "auto_passed": 0,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 413,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "wall_time_seconds": 52.1,
       "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
@@ -254,36 +426,72 @@
         "victory_progress": {
           "field": "victory_progress",
           "mean": 0.83972,
+          "sd": 0.050662,
+          "sem": 0.016021,
+          "ci95": [
+            0.803481,
+            0.875959
+          ],
           "n": 10,
           "episodes": 10
         },
         "extinction_progress": {
           "field": "extinction_progress",
           "mean": 0.24096,
+          "sd": 0.075384,
+          "sem": 0.023838,
+          "ci95": [
+            0.187037,
+            0.294883
+          ],
           "n": 10,
           "episodes": 10
         },
         "plague_score": {
           "field": "plague_score",
           "mean": 1068.876,
+          "sd": 120.872883,
+          "sem": 38.223362,
+          "ci95": [
+            982.414755,
+            1155.337245
+          ],
           "n": 10,
           "episodes": 10
         },
         "affected_pct": {
           "field": "affected_pct",
           "mean": 83.97200000000001,
+          "sd": 5.066234,
+          "sem": 1.602084,
+          "ci95": [
+            80.348086,
+            87.595914
+          ],
           "n": 10,
           "episodes": 10
         },
         "dead_pct": {
           "field": "dead_pct",
           "mean": 22.892,
+          "sd": 7.162474,
+          "sem": 2.264973,
+          "ci95": [
+            17.76863,
+            28.01537
+          ],
           "n": 10,
           "episodes": 10
         },
         "days_to_infect_50pct": {
           "field": "days_to_infect_50pct",
           "mean": 235.8,
+          "sd": 23.817827,
+          "sem": 7.531858,
+          "ci95": [
+            218.762937,
+            252.837063
+          ],
           "n": 10,
           "episodes": 10
         }
@@ -297,7 +505,14 @@
         "rejected_illegal": 5,
         "passed": 0,
         "auto_passed": 2695,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 391,
+          "rejected": 5,
+          "rejected_rate": 0.0128,
+          "illegal_rate": 0.0128,
+          "unreadable_rate": 0.0
+        }
       },
       "wall_time_seconds": 1822.8,
       "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
@@ -314,36 +529,72 @@
         "victory_progress": {
           "field": "victory_progress",
           "mean": 0.73651,
+          "sd": 0.077587,
+          "sem": 0.024535,
+          "ci95": [
+            0.681011,
+            0.792009
+          ],
           "n": 10,
           "episodes": 10
         },
         "extinction_progress": {
           "field": "extinction_progress",
           "mean": 0.21278000000000002,
+          "sd": 0.059497,
+          "sem": 0.018814,
+          "ci95": [
+            0.170222,
+            0.255338
+          ],
           "n": 10,
           "episodes": 10
         },
         "plague_score": {
           "field": "plague_score",
           "mean": 938.9280000000001,
+          "sd": 128.930368,
+          "sem": 40.771362,
+          "ci95": [
+            846.703179,
+            1031.152821
+          ],
           "n": 10,
           "episodes": 10
         },
         "affected_pct": {
           "field": "affected_pct",
           "mean": 73.651,
+          "sd": 7.758741,
+          "sem": 2.453529,
+          "ci95": [
+            68.101117,
+            79.200883
+          ],
           "n": 10,
           "episodes": 10
         },
         "dead_pct": {
           "field": "dead_pct",
           "mean": 20.214,
+          "sd": 5.652546,
+          "sem": 1.787492,
+          "ci95": [
+            16.170693,
+            24.257307
+          ],
           "n": 10,
           "episodes": 10
         },
         "days_to_infect_50pct": {
           "field": "days_to_infect_50pct",
           "mean": 243.1,
+          "sd": 21.768734,
+          "sem": 6.883878,
+          "ci95": [
+            227.528668,
+            258.671332
+          ],
           "n": 10,
           "episodes": 10
         }
@@ -357,7 +608,14 @@
         "rejected_illegal": 0,
         "passed": 0,
         "auto_passed": 2493,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 375,
+          "rejected": 0,
+          "rejected_rate": 0.0,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.0
+        }
       },
       "wall_time_seconds": 3249.4,
       "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
@@ -374,36 +632,72 @@
         "victory_progress": {
           "field": "victory_progress",
           "mean": 0.86463,
+          "sd": 0.044117,
+          "sem": 0.013951,
+          "ci95": [
+            0.833073,
+            0.896187
+          ],
           "n": 10,
           "episodes": 10
         },
         "extinction_progress": {
           "field": "extinction_progress",
           "mean": 0.30124,
+          "sd": 0.066559,
+          "sem": 0.021048,
+          "ci95": [
+            0.25363,
+            0.34885
+          ],
           "n": 10,
           "episodes": 10
         },
         "plague_score": {
           "field": "plague_score",
           "mean": 1151.095,
+          "sd": 104.825587,
+          "sem": 33.148761,
+          "ci95": [
+            1076.112502,
+            1226.077498
+          ],
           "n": 10,
           "episodes": 10
         },
         "affected_pct": {
           "field": "affected_pct",
           "mean": 86.463,
+          "sd": 4.411719,
+          "sem": 1.395108,
+          "ci95": [
+            83.307265,
+            89.618735
+          ],
           "n": 10,
           "episodes": 10
         },
         "dead_pct": {
           "field": "dead_pct",
           "mean": 28.617,
+          "sd": 6.323329,
+          "sem": 1.999612,
+          "ci95": [
+            24.093877,
+            33.140123
+          ],
           "n": 10,
           "episodes": 10
         },
         "days_to_infect_50pct": {
           "field": "days_to_infect_50pct",
           "mean": 222.3,
+          "sd": 29.612497,
+          "sem": 9.364294,
+          "ci95": [
+            201.117967,
+            243.482033
+          ],
           "n": 10,
           "episodes": 10
         }
@@ -417,7 +711,14 @@
         "rejected_illegal": 103,
         "passed": 0,
         "auto_passed": 2634,
-        "unparsed": 0
+        "unparsed": 0,
+        "rates": {
+          "attempted": 498,
+          "rejected": 105,
+          "rejected_rate": 0.2108,
+          "illegal_rate": 0.2068,
+          "unreadable_rate": 0.004
+        }
       },
       "wall_time_seconds": 3411.5,
       "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
