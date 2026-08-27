@@ -11,6 +11,9 @@ import pytest
 from tools.bench_local import (
     Budget,
     BudgetExceeded,
+    QuotaExhausted,
+    RateLimitError,
+    RateLimiter,
     aggregate,
     action_health,
     build_system_prompt,
@@ -114,6 +117,102 @@ def test_cached_input_is_billed_at_a_tenth():
     budget = Budget(max_calls=0, max_cost=0, price_in=10.00, price_out=0)
     budget.record(tokens_in=0, cached=1_000_000)
     assert budget.cost == pytest.approx(1.00)
+
+
+# ── Rate pacing ───────────────────────────────────────────────────────────────
+#
+# The limiter is tested through `_delay`, with timestamps placed by hand, so a
+# test of a sixty-second window does not take sixty seconds.
+
+def test_pacing_is_off_unless_asked_for():
+    """A paid key must not pay a pacing cost it never asked for."""
+    limiter = RateLimiter()
+    assert not limiter.active
+    limiter.wait()                              # returns at once, no sleep
+    assert limiter.waited == 0.0
+
+
+def test_the_request_window_holds_a_call_back_once_it_is_full():
+    limiter = RateLimiter(rpm=10)
+    now = 1000.0
+    # Chronological, as `wait` appends them: oldest first.
+    limiter._calls = [now - 45 + 5 * i for i in range(10)]
+    delay = limiter._delay(now)
+    assert delay > 0
+    # The oldest is 45s old, so the window frees up 15s from now.
+    assert delay == pytest.approx(15.0, abs=0.01)
+
+
+def test_a_call_is_admitted_once_the_window_has_drained():
+    limiter = RateLimiter(rpm=10)
+    now = 1000.0
+    limiter._calls = [now - 61 - i for i in range(10)]    # all older than a minute
+    assert limiter._delay(now) == 0
+    assert limiter._calls == []                           # pruned
+
+
+def test_the_token_window_binds_where_the_request_window_does_not():
+    """Gemma's free tier allows 30 rpm but only 16K tpm, and one turn of this
+    benchmark costs ~1.8K -- so tokens run out first, at about 9 calls."""
+    limiter = RateLimiter(rpm=30, tpm=16_000)
+    now = 1000.0
+    limiter._calls = [now - 9 + i for i in range(9)]           # well inside 30 rpm
+    limiter._tokens = [(now - 9 + i, 1800) for i in range(9)]  # 16.2K in the window
+    limiter.record(1800)
+    assert limiter._delay(now) > 0, "16.2K + 1.8K exceeds 16K and must wait"
+
+
+def test_the_first_call_is_never_paced_on_tokens():
+    """What a request costs is only known once it is made."""
+    limiter = RateLimiter(tpm=16_000)
+    assert limiter._delay(1000.0) == 0
+
+
+def test_recording_zero_tokens_does_not_enter_the_window():
+    limiter = RateLimiter(tpm=16_000)
+    limiter.record(0)
+    assert limiter._tokens == []
+
+
+def test_the_limiter_describes_both_limits_for_the_guards_line():
+    assert RateLimiter(rpm=8).describe() == "8 rpm"
+    assert RateLimiter(rpm=30, tpm=16_000).describe() == "30 rpm + 16000 tpm"
+
+
+# ── Rate-limit responses ──────────────────────────────────────────────────────
+
+def _openai_agent(monkeypatch, body, status):
+    from tools import bench_local
+    agent = bench_local.OpenAICompatAgent(
+        "gemma-4-31b", "system", Budget(max_calls=0, max_cost=0, price_in=0, price_out=0),
+        retries=0, base_url="https://example.com/v1", api_key="k",
+        temperature=0.0, max_tokens=1024,
+    )
+    monkeypatch.setattr(bench_local, "_post_json", lambda *a, **k: (body, status))
+    return agent
+
+
+def test_a_per_minute_limit_is_retried_not_fatal(monkeypatch):
+    agent = _openai_agent(monkeypatch, '{"error":{"message":"Quota exceeded for requests"}}', 429)
+    with pytest.raises(RateLimitError):
+        agent._call("go")
+
+
+def test_a_daily_quota_stops_the_run_instead_of_sleeping_out_the_retries(monkeypatch):
+    """Waiting cannot clear a per-day quota. Stopping keeps the episodes that
+    finished; retrying just burns the backoff and then fails anyway."""
+    body = '{"error":{"message":"quota metric GenerateRequestsPerDayPerProject-FreeTier"}}'
+    agent = _openai_agent(monkeypatch, body, 429)
+    with pytest.raises(QuotaExhausted):
+        agent._call("go")
+
+
+def test_a_daily_quota_is_fatal_so_the_episode_loop_stops_cleanly():
+    """QuotaExhausted must be caught by the same handler that stops a run, or
+    the guard is decorative."""
+    from tools.bench_local import FatalAgentError
+    assert issubclass(QuotaExhausted, FatalAgentError)
+    assert issubclass(RateLimitError, Exception)
 
 
 # ── Manifest wiring ───────────────────────────────────────────────────────────

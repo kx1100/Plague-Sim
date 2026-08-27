@@ -45,6 +45,7 @@ import json
 import math
 import os
 import random
+import re
 import statistics
 import sys
 import time
@@ -92,6 +93,91 @@ class FatalAgentError(Exception):
 
 class TransientAgentError(Exception):
     """Worth retrying: rate limit, 5xx, connection dropped."""
+
+
+class RateLimitError(TransientAgentError):
+    """A quota measured per minute. Worth retrying, but not on the seconds-long
+    backoff a dropped connection deserves -- the window itself is a minute, so
+    a retry that comes back inside it just spends another attempt."""
+
+
+class QuotaExhausted(FatalAgentError):
+    """A quota measured per day. Waiting will not clear it, so the run stops
+    and keeps the episodes that finished rather than burning its retries."""
+
+
+# ── Rate guard ────────────────────────────────────────────────────────────────
+
+class RateLimiter:
+    """
+    Proactive pacing for quotas measured per minute.
+
+    A free-tier key is not a slow paid key: exceeding its rate does not cost
+    more, it fails the run. The harness calls sequentially, so left alone it
+    issues requests as fast as the endpoint answers -- twenty to forty a minute
+    against a cap of eight -- and a sweep budgeted for an hour dies in its
+    second minute, mid-episode, having already spent the quota it needed.
+
+    Both limits are sliding sixty-second windows, because that is how the
+    provider measures them: a fixed sleep between calls satisfies a request cap
+    but not a token cap, and Gemma's free tier binds on tokens (16K/min) long
+    before it binds on requests (30/min). Tokens are estimated from the last
+    call, since what a request costs is only known once it is made.
+    """
+
+    def __init__(self, rpm: float = 0, tpm: float = 0):
+        self.rpm = rpm or 0
+        self.tpm = tpm or 0
+        self.waited = 0.0
+        self._calls: list[float] = []
+        self._tokens: list[tuple[float, int]] = []
+        self._last = 0
+
+    @property
+    def active(self) -> bool:
+        return bool(self.rpm or self.tpm)
+
+    def describe(self) -> str:
+        parts = []
+        if self.rpm:
+            parts.append(f"{self.rpm:g} rpm")
+        if self.tpm:
+            parts.append(f"{self.tpm:g} tpm")
+        return " + ".join(parts)
+
+    def _delay(self, now: float) -> float:
+        cutoff = now - 60.0
+        self._calls = [t for t in self._calls if t > cutoff]
+        self._tokens = [(t, n) for t, n in self._tokens if t > cutoff]
+
+        delay = 0.0
+        if self.rpm and len(self._calls) >= self.rpm:
+            delay = max(delay, 60.0 - (now - self._calls[0]))
+        if self.tpm and self._last and self._tokens:
+            used = sum(n for _, n in self._tokens)
+            if used + self._last > self.tpm:
+                delay = max(delay, 60.0 - (now - self._tokens[0][0]))
+        return delay
+
+    def wait(self) -> None:
+        """Block until another call fits inside every window."""
+        if not self.active:
+            return
+        while True:
+            now = time.monotonic()
+            delay = self._delay(now)
+            if delay <= 0:
+                self._calls.append(now)
+                return
+            time.sleep(min(delay, 60.0))
+            self.waited += min(delay, 60.0)
+
+    def record(self, tokens: int) -> None:
+        if not self.active:
+            return
+        self._last = tokens
+        if tokens:
+            self._tokens.append((time.monotonic(), tokens))
 
 
 # ── Spend guard ───────────────────────────────────────────────────────────────
@@ -338,6 +424,9 @@ class _PromptedAgent(Agent):
         self.system_prompt = system_prompt
         self.budget = budget
         self.retries = retries
+        # Replaced by build_agent when --rpm/--tpm are set. Inert by default, so
+        # a paid key pays no pacing cost it did not ask for.
+        self.limiter = RateLimiter()
 
     def act(self, obs, history):
         user = build_user_prompt(obs, history)
@@ -347,12 +436,27 @@ class _PromptedAgent(Agent):
         last = None
         for attempt in range(self.retries + 1):
             self.budget.guard()
+            self.limiter.wait()
+            spent = self.budget.tokens_in + self.budget.tokens_out
             try:
-                return parse_reply(self._call(user))
+                raw = self._call(user)
+            except RateLimitError as exc:
+                # The window is a minute wide, so seconds of backoff only spend
+                # attempts. Climb towards it instead.
+                last = exc
+                if attempt < self.retries:
+                    time.sleep(min(20 * 2 ** attempt, 60))
+                continue
             except TransientAgentError as exc:
                 last = exc
                 if attempt < self.retries:
                     time.sleep(min(2 ** attempt, 8))
+                continue
+            finally:
+                # Tokens are spent whether or not the reply parses, and the
+                # limiter has to know before it paces the next call.
+                self.limiter.record(self.budget.tokens_in + self.budget.tokens_out - spent)
+            return parse_reply(raw)
         raise FatalAgentError(f"gave up after {self.retries + 1} attempts: {last}")
 
     def _call(self, user: str) -> str:
@@ -582,7 +686,14 @@ class OpenAICompatAgent(_PromptedAgent):
         if status in (400, 401, 403, 404):
             raise FatalAgentError(f"{status} from {self.base_url}: {body[:300]}")
         if status == 429:
-            raise TransientAgentError(f"rate limited: {body[:200]}")
+            # Google reports both caps as 429. A daily one will not clear by
+            # waiting, so it stops the run cleanly -- with the finished
+            # episodes saved -- rather than sleeping out the retries first.
+            if re.search(r"per\s*day|perday|daily", body, re.I):
+                raise QuotaExhausted(
+                    f"daily quota exhausted for {self.model}: {body[:200]}"
+                )
+            raise RateLimitError(f"rate limited: {body[:200]}")
         if status >= 400:
             raise TransientAgentError(f"{status}: {body[:200]}")
 
@@ -1008,6 +1119,13 @@ def action_health(episodes: list[dict]) -> tuple[str, str | None]:
 # ── Wiring ────────────────────────────────────────────────────────────────────
 
 def build_agent(args, system_prompt: str, budget: Budget) -> Agent:
+    agent = _construct_agent(args, system_prompt, budget)
+    if isinstance(agent, _PromptedAgent):
+        agent.limiter = RateLimiter(args.rpm, args.tpm)
+    return agent
+
+
+def _construct_agent(args, system_prompt: str, budget: Budget) -> Agent:
     backend, _, model = args.model.partition("/")
     if not model and backend not in POLICIES:
         raise SystemExit(
@@ -1124,6 +1242,14 @@ def main() -> int:
     parser.add_argument("--probe", action="store_true",
                         help="One model call on a fresh board, printed in full, then exit")
     parser.add_argument("--retries", type=int, default=2, help="Retries per transient failure")
+    parser.add_argument("--rpm", type=float, default=0,
+                        help="Pace calls to this many requests per minute (0 = no pacing). "
+                             "Set it to the key's quota: on a free tier, exceeding the rate "
+                             "fails the run rather than costing more.")
+    parser.add_argument("--tpm", type=float, default=0,
+                        help="Pace calls to this many tokens per minute (0 = no pacing). "
+                             "The binding limit on some free tiers — Gemma allows 30 rpm but "
+                             "only 16K tpm, and one turn of this benchmark costs ~1.8K.")
 
     parser.add_argument("--temperature", type=float, default=0.3,
                         help="ollama and openai backends (Claude models reject it)")
@@ -1185,6 +1311,8 @@ def main() -> int:
             caps.append(f"${max_cost:.2f}")
         elif paid and not budget.priced:
             caps.append("cost unknown — pass --price-in/--price-out to enforce a $ cap")
+        if agent.limiter.active:
+            caps.append(f"paced to {agent.limiter.describe()}")
         print(f"guards     : {', '.join(caps)}"
               f"{' | skip-idle on' if args.skip_idle else ''}")
     print(f"episodes   : {len(seeds)} — seeds {seeds}")
@@ -1231,6 +1359,11 @@ def main() -> int:
     print("=== Run summary ===")
     print(f"agent    : {agent.describe()}")
     print(f"episodes : {len(episodes)} in {elapsed:.0f}s")
+    if agent.uses_model and agent.limiter.waited:
+        # Distinguishes a slow model from a throttled one: the same wall time
+        # means very different things about the two.
+        print(f"paced    : {agent.limiter.waited:.0f}s of {elapsed:.0f}s spent "
+              f"waiting on the {agent.limiter.describe()} limit")
     if agent.uses_model:
         print(f"usage    : {budget.summary()}")
         health_line, health_warning = action_health(episodes)
