@@ -10,6 +10,7 @@ import pytest
 
 from tools.bench_local import (
     Budget,
+    strip_thoughts,
     BudgetExceeded,
     QuotaExhausted,
     RateLimitError,
@@ -117,6 +118,58 @@ def test_cached_input_is_billed_at_a_tenth():
     budget = Budget(max_calls=0, max_cost=0, price_in=10.00, price_out=0)
     budget.record(tokens_in=0, cached=1_000_000)
     assert budget.cost == pytest.approx(1.00)
+
+
+# ── Inline reasoning ──────────────────────────────────────────────────────────
+#
+# Every case below is a real reply from the gemma-4-31b-it sweep, where 305 of
+# 729 attempted moves were truncated mid-thought. They were recorded as actions
+# the environment could not read -- the bucket meaning "the parser failed" --
+# which hid the warning that names the real cause: the model ran out of room
+# before it answered.
+
+TRUNCATED = [
+    "<thought>\nI should boost transmission early.\n</thought>",
+    "<thought>\nWait, let me think.</thought>",
+    "<thought>\nActually, looking at the reward function: `infected_fraction + dead_fraction</thought>",
+    "<thought>\nLet's see if `null` is better. If I `</thought>",
+    "<thought>\nPulmonaryOedema`, `Pul</thought>",
+    "<thought>\nDi",                                  # never closed at all
+]
+
+
+@pytest.mark.parametrize("reply", TRUNCATED)
+def test_a_reply_that_is_all_reasoning_counts_as_no_reply(reply):
+    """Empty action *and* empty reasoning is what the episode loop records as
+    `unparsed`, which is the bucket that fires the truncation warning."""
+    action, reasoning = parse_reply(reply)
+    assert action is None
+    assert reasoning.strip() == ""
+
+
+def test_a_thought_block_does_not_swallow_the_answer_that_follows_it():
+    reply = "<thought>\nAir2 is the cheap reach.\n</thought>\nREASON: cheap reach\nACTION: Air2"
+    assert parse_reply(reply) == ("Air2", "cheap reach")
+
+
+@pytest.mark.parametrize("tag", ["thought", "think", "thinking"])
+def test_the_common_tag_spellings_are_all_stripped(tag):
+    assert strip_thoughts(f"<{tag}>reasoning</{tag}>ACTION: Air1").strip() == "ACTION: Air1"
+
+
+def test_a_reply_with_no_reasoning_block_is_left_alone():
+    """The strip must be inert for every model that does not reason inline."""
+    for reply in ("REASON: x\nACTION: Air1", "Air1", "", "a < b and c > d"):
+        assert strip_thoughts(reply) == reply
+
+
+def test_a_deliberate_null_is_still_told_apart_from_a_truncated_reply():
+    """Both reach the environment as no action and they mean opposite things:
+    one is a legitimate move, the other is a turn the model never took."""
+    action, reasoning = parse_reply("REASON: bank DNA for Air3\nACTION: null")
+    assert action is None and reasoning.strip()          # -> passed
+    action, reasoning = parse_reply("<thought>\nhmm</thought>")
+    assert action is None and not reasoning.strip()      # -> unparsed
 
 
 # ── Rate pacing ───────────────────────────────────────────────────────────────

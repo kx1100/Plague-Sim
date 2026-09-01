@@ -58,6 +58,7 @@ def make_episode(seed="India", **overrides):
                        passed=0, auto_passed=1, unparsed=0),
         "score": {"outcome": "cured", "day": 298, "victory_progress": 0.9116,
                   "dead_pct": 25.67},
+        "rejections": [{"day": 12, "replied": "Air 2", "error": "'Air 2' is not a valid trait ID."}],
         "turns": [],
     }
     episode.update(overrides)
@@ -152,6 +153,27 @@ def test_results_and_per_episode_detail_both_survive():
     assert [ep["seed"] for ep in record["episodes"]] == ["India", "USA"]
     assert record["episodes"][0]["wall_time_seconds"] == 208.4
     assert record["episodes"][0]["usage"]["tokens_out"] == 820
+
+
+def test_the_record_keeps_what_a_rejected_reply_actually_said():
+    """
+    A count says a run failed; the strings say why. That is not recoverable
+    later -- a five-hour sweep rejected 42% of its moves and left no evidence
+    of what it had emitted, because the raw text only went to a --verbose
+    stdout nobody had asked for.
+    """
+    episode = build()["episodes"][0]
+    assert episode["rejections"][0]["replied"] == "Air 2"
+    assert "not a valid trait ID" in episode["rejections"][0]["error"]
+
+
+def test_an_episode_with_nothing_rejected_still_carries_the_key():
+    """An absent list and an empty one must not be told apart by a reader."""
+    record = build(episodes=[make_episode(rejections=[])])
+    assert record["episodes"][0]["rejections"] == []
+    stripped = make_episode()
+    del stripped["rejections"]
+    assert build(episodes=[stripped])["episodes"][0]["rejections"] == []
 
 
 def test_a_stopped_run_says_so():

@@ -722,6 +722,109 @@
       },
       "wall_time_seconds": 3411.5,
       "git_sha": "0f2a232970548871f632029bd2a5e71d8a8db880"
+    },
+    {
+      "run_id": "2026-09-01-openai-gemma-4-31b-it",
+      "path": "2026-09-01-openai-gemma-4-31b-it/run.json",
+      "recorded_at": "2026-09-01T07:16:28Z",
+      "model": "openai/gemma-4-31b-it",
+      "backend": "openai",
+      "episodes": 10,
+      "primary_metric": "victory_progress",
+      "metrics": {
+        "victory_progress": {
+          "field": "victory_progress",
+          "mean": 0.9414900000000002,
+          "sd": 0.037289,
+          "sem": 0.011792,
+          "ci95": [
+            0.914817,
+            0.968163
+          ],
+          "n": 10,
+          "episodes": 10
+        },
+        "extinction_progress": {
+          "field": "extinction_progress",
+          "mean": 0.5062099999999999,
+          "sd": 0.065099,
+          "sem": 0.020586,
+          "ci95": [
+            0.459644,
+            0.552776
+          ],
+          "n": 10,
+          "episodes": 10
+        },
+        "plague_score": {
+          "field": "plague_score",
+          "mean": 1422.72,
+          "sd": 90.648647,
+          "sem": 28.665619,
+          "ci95": [
+            1357.878369,
+            1487.561631
+          ],
+          "n": 10,
+          "episodes": 10
+        },
+        "affected_pct": {
+          "field": "affected_pct",
+          "mean": 94.149,
+          "sd": 3.728865,
+          "sem": 1.179171,
+          "ci95": [
+            91.481716,
+            96.816284
+          ],
+          "n": 10,
+          "episodes": 10
+        },
+        "dead_pct": {
+          "field": "dead_pct",
+          "mean": 48.09,
+          "sd": 6.185979,
+          "sem": 1.956178,
+          "ci95": [
+            43.665125,
+            52.514875
+          ],
+          "n": 10,
+          "episodes": 10
+        },
+        "days_to_infect_50pct": {
+          "field": "days_to_infect_50pct",
+          "mean": 223.0,
+          "sd": 24.553796,
+          "sem": 7.764592,
+          "ci95": [
+            205.436493,
+            240.563507
+          ],
+          "n": 10,
+          "episodes": 10
+        }
+      },
+      "outcomes": {
+        "cured": 10
+      },
+      "action_health": {
+        "accepted": 424,
+        "rejected_unknown": 305,
+        "rejected_illegal": 0,
+        "passed": 67,
+        "auto_passed": 2793,
+        "unparsed": 0,
+        "rates": {
+          "attempted": 729,
+          "rejected": 305,
+          "rejected_rate": 0.4184,
+          "illegal_rate": 0.0,
+          "unreadable_rate": 0.4184
+        }
+      },
+      "wall_time_seconds": 19326.0,
+      "git_sha": "f5d76ae01472b38ca7d37f9fb3f30dec3dfaf013"
     }
   ]
 }

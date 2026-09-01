@@ -234,6 +234,9 @@ def build_run_record(
                 "wall_time_seconds": ep.get("wall_time_seconds"),
                 "usage": ep.get("usage"),
                 "action_health": ep["health"],
+                # The strings, not just the tally. A record that says 42% were
+                # rejected without saying what they were cannot be acted on.
+                "rejections": ep.get("rejections") or [],
                 "terminal_info": ep["score"],
             }
             for ep in episodes

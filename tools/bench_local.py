@@ -307,6 +307,37 @@ def build_user_prompt(obs: dict, history: list[str]) -> str:
     return "\n".join(lines)
 
 
+# Reasoning a model writes into the reply body rather than a separate field.
+# Gemma 4 uses <thought>; others reach for <think> or <thinking>.
+_THOUGHT_BLOCK = re.compile(r"<(thought|think|thinking)\b[^>]*>.*?</\1\s*>", re.S | re.I)
+_THOUGHT_CLOSE = re.compile(r"</(?:thought|think|thinking)\s*>", re.I)
+_THOUGHT_OPEN = re.compile(r"<(?:thought|think|thinking)\b[^>]*>", re.I)
+
+
+def strip_thoughts(text: str) -> str:
+    """
+    Drop an inline reasoning block, closed or not.
+
+    A model that reasons in the reply body and then runs out of tokens leaves a
+    fragment ending in a closing tag and never reaches its answer. Left in,
+    `parse_reply` takes that fragment's last line as the action, and the
+    environment records a move it could not read -- which lands in the bucket
+    that means "the parser failed", and hides the warning that would have named
+    the actual cause: the model needed more room to answer.
+
+    An unmatched closing tag means the reasoning began before it; an unmatched
+    opening tag means it never ended. Both leave nothing usable on the far side.
+    """
+    cleaned = _THOUGHT_BLOCK.sub(" ", text)
+    closes = list(_THOUGHT_CLOSE.finditer(cleaned))
+    if closes:
+        cleaned = cleaned[closes[-1].end():]
+    opened = _THOUGHT_OPEN.search(cleaned)
+    if opened:
+        cleaned = cleaned[:opened.start()]
+    return cleaned
+
+
 def parse_reply(text: str) -> tuple[str | None, str]:
     """
     Pull (action, reasoning) out of a model reply.
@@ -316,6 +347,12 @@ def parse_reply(text: str) -> tuple[str | None, str]:
     agent gets. Being stricter here would score models on format compliance
     that the real harness forgives.
     """
+    text = strip_thoughts(text)
+    if not text.strip():
+        # Nothing but reasoning: the answer never arrived. Reported as an empty
+        # reply, which is what it is, so the truncation warning can fire.
+        return None, ""
+
     reasoning, action_line = "", None
     for line in text.splitlines():
         stripped = line.strip().lstrip("*# ").strip()
@@ -770,6 +807,11 @@ class EnvClient:
 
 # ── Episode loop ──────────────────────────────────────────────────────────────
 
+# Rejected replies kept per episode. Enough to see the shape of the failure --
+# whether it is one systematic mistake or many different ones -- without
+# turning a committed record into a transcript.
+_REJECTION_SAMPLES = 25
+
 _OBS_KEYS = (
     "day", "dna", "dna_earned", "cure_progress", "infected_pct", "dead_pct",
     "victory_progress", "countries_infected",
@@ -794,6 +836,13 @@ def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dic
     # two are indistinguishable in the results.
     health = dict(accepted=0, rejected_unknown=0, rejected_illegal=0,
                   passed=0, auto_passed=0, unparsed=0)
+    # What the rejected replies actually said. A count alone tells you a run
+    # failed without telling you why, and that is not recoverable afterwards:
+    # a five-hour sweep that rejected 42% of its moves left no evidence of what
+    # it had emitted, because the raw strings only ever went to a --verbose
+    # stdout nobody had asked for. Capped, because the point is a diagnosis,
+    # not a transcript.
+    rejections: list[dict] = []
 
     while not done and step < args.max_steps:
         step += 1
@@ -846,8 +895,15 @@ def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dic
         else:
             health["accepted"] += 1
 
-        if info.get("action_error") and args.verbose:
-            print(f"    day {info['day']}: rejected {action!r} — {info['action_error']}")
+        if info.get("action_error"):
+            if len(rejections) < _REJECTION_SAMPLES:
+                rejections.append({
+                    "day": info["day"],
+                    "replied": action,
+                    "error": info["action_error"],
+                })
+            if args.verbose:
+                print(f"    day {info['day']}: rejected {action!r} — {info['action_error']}")
         history.append(
             f"day {info['day']}: {played or 'pass'}"
             f"{'' if accepted is not False else ' (rejected)'}"
@@ -894,6 +950,7 @@ def run_episode(env: EnvClient, agent: Agent, seed, budget: Budget, args) -> dic
         "seed": seed,
         "rng_seed": rng_seed,
         "health": health,
+        "rejections": rejections,
         "steps": step,
         "done": done,
         "truncated": truncated,
