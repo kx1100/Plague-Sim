@@ -355,6 +355,75 @@ def test_the_index_accumulates_runs_and_replaces_a_resave(tmp_path):
     ]
 
 
+def test_the_index_names_the_model_by_where_it_answered_from(tmp_path):
+    """`openai/gemma-4-31b-it` names the wire protocol, not the vendor: that
+    run is Google's Gemma reached through an OpenAI-compatible layer, and a
+    picker showing the raw id tells a reader it was an OpenAI model."""
+    args = make_args(model="openai/gemma-4-31b-it",
+                     base_url="https://generativelanguage.googleapis.com/v1beta/openai")
+    record = build(args=args, runs_dir=tmp_path)
+    entry = run_store.index_entry(record, run_store.save_run(record, tmp_path), tmp_path)
+
+    assert entry["label"] == "gemma-4-31b-it @ generativelanguage.googleapis.com"
+    assert entry["endpoint"] == "https://generativelanguage.googleapis.com/v1beta/openai"
+
+
+def test_a_local_model_is_labelled_as_local(tmp_path):
+    """`gemma3:4b` on this machine and `gemma-4-31b-it` on Google's are
+    different claims, and the sweep contains both."""
+    record = build(runs_dir=tmp_path)
+    entry = run_store.index_entry(record, run_store.save_run(record, tmp_path), tmp_path)
+
+    assert entry["label"] == "llama3.2 (ollama)"
+    assert entry["endpoint"] == "http://localhost:11434"
+
+
+def test_a_resave_cannot_un_supersede_a_run(tmp_path):
+    """Superseding is a judgement the harness cannot make and must not undo. A
+    retired run kept as evidence of a defect would otherwise quietly become a
+    citable score again the next time anything rewrote the index."""
+    record = build(runs_dir=tmp_path)
+    path = run_store.save_run(record, tmp_path)
+    index_path = run_store.append_to_index(record, path, tmp_path)
+
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index["runs"][0]["superseded_by"] = "2026-09-02-rerun"
+    index["runs"][0]["note"] = "reply parser ate 42% of its moves"
+    index_path.write_text(json.dumps(index), encoding="utf-8")
+
+    run_store.append_to_index(record, path, tmp_path)
+    entry = json.loads(index_path.read_text(encoding="utf-8"))["runs"][0]
+    assert entry["superseded_by"] == "2026-09-02-rerun"
+    assert entry["note"] == "reply parser ate 42% of its moves"
+
+
+def test_a_model_id_resolves_to_the_run_that_replaced_the_retired_one(tmp_path):
+    """The everyday question is "how did gemma-4 do", and the answer must never
+    be the record that was retired for a defect."""
+    first = build(runs_dir=tmp_path)
+    run_store.append_to_index(first, run_store.save_run(first, tmp_path), tmp_path)
+    second = build(runs_dir=tmp_path, run_id="2026-08-24-ollama-llama3-2")
+    run_store.append_to_index(second, run_store.save_run(second, tmp_path), tmp_path)
+
+    index_path = tmp_path / "index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index["runs"][0]["superseded_by"] = second["run_id"]
+    index_path.write_text(json.dumps(index), encoding="utf-8")
+
+    assert run_store.resolve("ollama/llama3.2", tmp_path)["run_id"] == second["run_id"]
+    # Naming the retired run outright still works: comparing a run against the
+    # one that replaced it is how the cost of a defect gets measured.
+    assert run_store.resolve(first["run_id"], tmp_path)["run_id"] == first["run_id"]
+
+
+def test_resolving_an_unknown_model_says_what_was_recorded(tmp_path):
+    record = build(runs_dir=tmp_path)
+    run_store.append_to_index(record, run_store.save_run(record, tmp_path), tmp_path)
+
+    with pytest.raises(KeyError, match="ollama/llama3.2"):
+        run_store.resolve("openai/gpt-5", tmp_path)
+
+
 def test_a_corrupt_index_is_moved_aside_not_discarded(tmp_path):
     (tmp_path / "index.json").write_text("{not json", encoding="utf-8")
     record = build(runs_dir=tmp_path)

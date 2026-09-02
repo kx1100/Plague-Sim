@@ -33,6 +33,14 @@ ROOT = Path(__file__).resolve().parent.parent
 RUNS_DIR = ROOT / "runs"
 SCHEMA_VERSION = "1"
 
+# Judgements a person adds to an index entry after the run: which run a later
+# one replaces, and why. The harness never writes them -- it cannot know -- so
+# a re-save must carry them across rather than flatten them back to the
+# measured facts. `superseded_by` is the one that matters: a run kept as
+# evidence of a defect must not be read as a citable score, and deleting it
+# instead would destroy the evidence.
+CURATED_KEYS = ("superseded_by", "note")
+
 # Everything that changes what the model was asked to do. All of it goes in the
 # record: a setting nobody wrote down is a setting nobody can reproduce, and
 # the protocol is frozen precisely so these do not drift between models.
@@ -251,6 +259,26 @@ def save_run(record: dict, runs_dir: Path = RUNS_DIR) -> Path:
     return path
 
 
+def display_label(model: dict) -> str:
+    """
+    What to call this model on screen.
+
+    `model.id` names the *protocol*, not the vendor: `openai/gemma-4-31b-it` is
+    Google's Gemma reached through an OpenAI-compatible layer, and a picker
+    showing the raw id tells a reader it was an OpenAI model. The host is the
+    fact that settles it, so it goes in the label rather than a click away in
+    the record. Ollama is named for the same reason in reverse -- `gemma3:4b`
+    run locally and `gemma-4-31b-it` run hosted are different claims.
+    """
+    backend, name = model["backend"], model["name"]
+    if backend == "openai":
+        host = urlsplit(model.get("base_url") or "").hostname
+        return f"{name} @ {host}" if host else name
+    if backend == "ollama":
+        return f"{name} (ollama)"
+    return model["id"]
+
+
 def index_entry(record: dict, run_path: Path, runs_dir: Path) -> dict:
     """The summary the showcase's model picker and the stats script read."""
     result = record["result"]
@@ -259,6 +287,10 @@ def index_entry(record: dict, run_path: Path, runs_dir: Path) -> dict:
         "path": run_path.relative_to(runs_dir).as_posix(),
         "recorded_at": record["recorded_at"],
         "model": record["model"]["id"],
+        "label": display_label(record["model"]),
+        # Where the model actually answered from. Two runs of the same weights
+        # in different places are not the same measurement.
+        "endpoint": record["model"].get("base_url") or record["model"].get("host"),
         "backend": record["model"]["backend"],
         "episodes": result["episodes_completed"],
         "primary_metric": record["environment"]["primary_metric"],
@@ -280,6 +312,10 @@ def append_to_index(record: dict, run_path: Path, runs_dir: Path = RUNS_DIR) -> 
     runs were made and the git diff down to the entry that changed. A corrupt
     index is moved aside rather than silently discarded, since it is the only
     list of what has been run.
+
+    `CURATED_KEYS` survive the replacement: they are a person's judgement about
+    a run, not a measurement of it, so regenerating the entry from the record
+    must not quietly un-supersede a run somebody retired.
     """
     index_path = runs_dir / "index.json"
     doc = {"schema_version": SCHEMA_VERSION, "runs": []}
@@ -295,7 +331,8 @@ def append_to_index(record: dict, run_path: Path, runs_dir: Path = RUNS_DIR) -> 
     runs = list(doc["runs"])
     for position, existing in enumerate(runs):
         if existing.get("run_id") == entry["run_id"]:
-            runs[position] = entry
+            carried = {k: existing[k] for k in CURATED_KEYS if k in existing}
+            runs[position] = {**entry, **carried}
             break
     else:
         runs.append(entry)
@@ -304,3 +341,53 @@ def append_to_index(record: dict, run_path: Path, runs_dir: Path = RUNS_DIR) -> 
     index_path.parent.mkdir(parents=True, exist_ok=True)
     index_path.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
     return index_path
+
+
+# ── Reading a published sweep back ────────────────────────────────────────────
+
+def read_index(runs_dir: Path = RUNS_DIR) -> list[dict]:
+    """Every recorded run, in the order it was made. Superseded ones included:
+    filtering is the caller's decision, and `compare_runs.py` still has to be
+    able to name one explicitly to show what a defect cost."""
+    index_path = runs_dir / "index.json"
+    if not index_path.exists():
+        return []
+    doc = json.loads(index_path.read_text(encoding="utf-8"))
+    runs = doc.get("runs")
+    return runs if isinstance(runs, list) else []
+
+
+def load_record(entry: dict, runs_dir: Path = RUNS_DIR) -> dict:
+    """The full record behind an index entry -- the per-episode detail the
+    index deliberately does not carry."""
+    return json.loads((runs_dir / entry["path"]).read_text(encoding="utf-8"))
+
+
+def resolve(spec: str, runs_dir: Path = RUNS_DIR, entries: list[dict] | None = None) -> dict:
+    """
+    Find a run from what a person would type: a run id, or a model id.
+
+    A model id resolves to that model's newest run that has not been
+    superseded, because the everyday question is "how did gemma-4 do" and the
+    answer must never quietly be the retired record. Naming a superseded run's
+    id directly still works -- that is a deliberate act, and comparing a run
+    against the one that replaced it is exactly how the cost of a defect gets
+    measured.
+    """
+    entries = read_index(runs_dir) if entries is None else entries
+    for entry in entries:
+        if entry.get("run_id") == spec:
+            return entry
+
+    matches = [e for e in entries if e.get("model") == spec or e.get("label") == spec]
+    if not matches:
+        known = ", ".join(sorted({e.get("model", "?") for e in entries})) or "none"
+        raise KeyError(f"no run matches {spec!r}. Recorded models: {known}")
+    live = [e for e in matches if not e.get("superseded_by")]
+    if not live:
+        retired = matches[-1]
+        raise KeyError(
+            f"every run of {spec!r} is superseded (latest by "
+            f"{retired['superseded_by']!r}). Name a run id to use it anyway."
+        )
+    return max(live, key=lambda e: (e.get("recorded_at") or "", e.get("run_id") or ""))

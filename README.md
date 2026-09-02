@@ -21,7 +21,7 @@ python -m venv .venv
 
 .venv/Scripts/python.exe run.py                 # passive baseline, seeded in India
 .venv/Scripts/python.exe run.py --help          # --seed-country, --max-days, --quiet
-.venv/Scripts/python.exe -m pytest tests -q     # 158 tests
+.venv/Scripts/python.exe -m pytest tests -q     # 234 tests
 ```
 
 The simulation itself is pure stdlib — `requirements.txt` is deliberately empty
@@ -198,20 +198,80 @@ query string and key-shaped path segments, since some providers carry the key in
 the URL. `tests/test_no_secrets.py` scans the tracked tree so a paste accident
 fails the suite instead of shipping.
 
+## Results — one recorded sweep
+
+Every model played the **same ten seed countries**, `--skip-idle`,
+`--temperature 0`, at most 600 days each. The runs are in [runs/](runs/) and the
+table below comes from [tools/compare_runs.py](tools/compare_runs.py), not from
+anybody's typing:
+
+```bash
+.venv/Scripts/python.exe tools/compare_runs.py --markdown
+```
+
+| model | episodes | victory_progress | 95% CI | vs baseline | bootstrap 95% | seeds won | rejected |
+|---|---:|---:|---|---:|---|---:|---:|
+| policy/random | 10 | 0.8618 | [0.8221, 0.9016] | baseline |  |  | 0.0% |
+| policy/pass | 10 | 0.7686 | [0.6913, 0.8459] | -0.0932 **\*** | [-0.1550, -0.0491] | 0/10 | n/a |
+| policy/greedy | 10 | 0.7572 | [0.6964, 0.8180] | -0.1047 **\*** | [-0.1488, -0.0640] | 1/10 | 0.0% |
+| policy/expert | 10 | 0.9987 | [0.9983, 0.9991] | +0.1369 **\*** | [+0.1043, +0.1693] | 10/10 | 0.0% |
+| llama3.2 (ollama) | 10 | 0.8397 | [0.8035, 0.8760] | -0.0221 | [-0.0658, +0.0216] | 3/10 | 1.3% |
+| mistral:7b (ollama) | 10 | 0.7365 | [0.6810, 0.7920] | -0.1253 **\*** | [-0.1892, -0.0590] | 2/10 | 0.0% |
+| gemma3:4b (ollama) | 10 | 0.8646 | [0.8331, 0.8962] | +0.0028 | [-0.0282, +0.0352] | 7/10 | 21.1% |
+| gemma-4-31b-it @ generativelanguage.googleapis.com | 10 | 0.9269 | [0.8873, 0.9666] | +0.0651 **\*** | [+0.0284, +0.1033] | 8/10 | 0.0% |
+
+**\*** the paired difference clears zero on both a Student's t and a 20,000-resample
+bootstrap interval.
+
+**Read the `vs baseline` column, not the means.** Both runs of a pair played
+the same seeds, and seed difficulty swings far wider than the models do —
+`policy/random` scores 0.79 on Egypt and 0.95 on Russia — so the unpaired
+`95% CI` column is dominated by which worlds got played, and the hosted model's
+interval overlaps `random`'s even though it beat it on 8 of the 10 shared seeds.
+The paired difference is the comparison the shared seeds support; the unpaired
+interval is printed beside it because a reader who computed it themselves would
+otherwise be misled by it.
+
+What the sweep says:
+
+- **The environment discriminates.** The one hosted mid-size model clears
+  careless play by +0.0651, and by +0.1953 on `extinction_progress` and 18.6
+  points of `dead_pct`, where the intervals do not overlap on either test.
+- **The 3–7B local models do not clear it.** `gemma3:4b` lands +0.0028 from
+  `random` — and a fifth of its attempted moves were rejected as illegal, so a
+  fifth of its score is the simulation running unattended.
+- **`victory_progress` ceilings.** `policy/expert` reaches 0.9987, so the
+  metrics that still separate strong play are `extinction_progress`,
+  `dead_pct` and `days_to_infect_50pct`; all four are reported.
+
+One run is deliberately kept out of the table: `2026-09-01-openai-gemma-4-31b-it`
+is marked `superseded_by` in [runs/index.json](runs/index.json). Its reply
+parser read the model's inline reasoning block as an answer and threw away 42%
+of its moves; it stays in the repo as the evidence for that fix, not as a score.
+
 ## Watching a run back
 
 [showcase/index.html](showcase/index.html) replays one episode day by day --
 the chart, a 71-country map, the model's reasoning and the trait it bought each
-turn. Open the file directly; there is no build step and nothing is fetched.
+turn, with a picker to switch between models and a **RESULTS** panel carrying
+the table above. Open the file directly; there is no build step and nothing is
+fetched.
 
-It uses a real exported run at `showcase/data/replay.json` when there is one and
-otherwise falls back to a bundled sample of the reference expert policy, saying
-so on screen. Either harness writes that file:
+The episodes it plays are **exhibition episodes**: the scored sweep stored
+summaries rather than turn-by-turn replays, so each model played the featured
+seed once more to have something watchable. They are labelled as such on screen
+and their outcomes are their own — the numbers above come from the ten scored
+seeds, never from these.
 
 ```bash
-python tools/bench_local.py --model ollama/llama3.2 --episodes 1   --export showcase/data/replay.json          # local run
-mesocosm run export RUN_ID -o showcase/data/replay.json    # platform run
+python tools/bench_local.py --model policy/expert --seeds India --skip-idle \
+    --temperature 0 --no-save --export showcase/data/exhibition-policy-expert.json
+python tools/publish_showcase.py        # -> showcase/replays/*.js
 ```
+
+A local export at `showcase/data/replay.json` still takes precedence when the
+page is served over http, and a checkout with nothing published falls back to
+the bundled expert-policy sample, saying so on screen.
 See [showcase/README.md](showcase/README.md).
 
 ## Balance and calibration
@@ -300,8 +360,11 @@ simulation/            spread, deaths, cure, dna, actions
 tools/calibrate.py     balance harness and acceptance targets
 tools/bench_local.py   run the benchmark against a model, without Mesocosm
 tools/run_store.py     run records: provenance, redaction, runs/index.json
+tools/compare_runs.py  paired per-seed comparison of two recorded runs
+tools/publish_showcase.py     runs/ + exhibition exports -> showcase/replays/
 runs/                  recorded runs, tracked and published
-tests/                 158 tests: sim mechanics, env lifecycle, adapter, balance, harness
+tests/                 234 tests: sim mechanics, env lifecycle, adapter, balance, harness
 showcase/index.html    replay UI -- open it directly, no build step
+showcase/replays/      the published sweep and its exhibition episodes
 tools/make_example_replay.py  regenerates the showcase's bundled sample
 ```

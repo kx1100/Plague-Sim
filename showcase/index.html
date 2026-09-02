@@ -42,7 +42,7 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  .app { height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  .app { height: 100%; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; }
 
   /* ── header ─────────────────────────────────────────────────────────── */
   .head {
@@ -69,6 +69,66 @@
   }
   .notice b { color: var(--accent); font-weight: 600; }
   .notice[hidden] { display: none; }
+
+  /* ── model picker ───────────────────────────────────────────────────── */
+  .runs {
+    display: flex; align-items: center; gap: 8px; padding: 10px 26px;
+    border-bottom: 1px solid var(--line); overflow-x: auto;
+    scrollbar-width: thin; scrollbar-color: oklch(.38 .015 250) var(--bg);
+  }
+  .runs[hidden] { display: none; }
+  .chip {
+    display: flex; align-items: baseline; gap: 8px; white-space: nowrap;
+    font-family: var(--mono); font-size: 12px; padding: 6px 10px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink-2);
+    cursor: pointer;
+  }
+  .chip:hover:not([disabled]) { border-color: var(--ink); }
+  .chip:focus-visible { outline: 2px solid var(--cure); outline-offset: 2px; }
+  .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--panel-2); color: var(--ink); }
+  .chip[disabled] { opacity: .42; cursor: not-allowed; }
+  .chip-score { color: var(--mute); }
+  .chip-mark { color: var(--infected); }
+  .chip-mark.flat { color: var(--mute-2); }
+  .chip-mark.down { color: var(--dead); }
+  .link {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .1em;
+    background: none; border: 1px solid oklch(.42 .015 250); color: var(--ink-2);
+    padding: 5px 10px; cursor: pointer;
+  }
+  .link:hover { border-color: var(--ink); color: var(--ink); }
+  .link:focus-visible { outline: 2px solid var(--cure); outline-offset: 2px; }
+  .link[hidden] { display: none; }
+
+  /* ── results ────────────────────────────────────────────────────────── */
+  .results {
+    position: fixed; inset: 0; z-index: 20; overflow: auto;
+    background: oklch(0.14 0.012 250 / .88); padding: 40px 20px;
+    display: flex; justify-content: center; align-items: flex-start;
+  }
+  .results[hidden] { display: none; }
+  .results-panel { width: 100%; max-width: 1180px; background: var(--panel); border: 1px solid var(--line); }
+  .results-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+    padding: 16px 20px; border-bottom: 1px solid var(--line);
+  }
+  .results-body { padding: 4px 20px 20px; }
+  .results-scroll { overflow-x: auto; }
+  .tbl { border-collapse: collapse; width: 100%; font-family: var(--mono); font-size: 12px; }
+  .tbl th, .tbl td { padding: 7px 10px; border-bottom: 1px solid var(--line-2); text-align: right; white-space: nowrap; }
+  .tbl th:first-child, .tbl td:first-child { text-align: left; }
+  .tbl thead th { color: var(--mute); font-weight: 500; font-size: 11px; letter-spacing: .08em; }
+  .tbl tbody tr.is-baseline td { color: var(--cure); }
+  .tbl tbody tr.is-current td { background: var(--panel-2); }
+  .tbl .up { color: var(--infected); }
+  .tbl .down { color: var(--dead); }
+  .tbl .flat { color: var(--mute); }
+  .results-note {
+    margin: 14px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--mute);
+    max-width: 82ch; text-wrap: pretty;
+  }
+  .results-note b { color: var(--ink-2); font-weight: 600; }
+  .results-note + .results-note { margin-top: 8px; }
 
   /* ── layout ─────────────────────────────────────────────────────────── */
   .body {
@@ -178,6 +238,9 @@
   .counter { font-family: var(--mono); font-size: 13px; color: var(--mute); white-space: nowrap; }
 
   @media (max-width: 1100px) {
+    .runs { padding: 10px 16px; }
+    .results { padding: 16px 8px; }
+    .results-body { padding: 4px 12px 16px; }
     .body { grid-template-columns: minmax(0, 1fr); }
     .split { grid-template-columns: minmax(0, 1fr); }
     .pane + .pane { border-left: none; border-top: 1px solid var(--line); }
@@ -196,10 +259,15 @@
       <span class="runmeta" id="runmeta"></span>
     </div>
     <div class="outcome">
+      <button class="link" id="results-open" hidden aria-haspopup="dialog">RESULTS</button>
       <span class="kicker">OUTCOME</span>
       <span class="badge" id="outcome">—</span>
     </div>
   </header>
+
+  <!-- The picker. Hidden entirely when no published sweep is bundled, so the
+       page still works as the single-episode replay it started as. -->
+  <div class="runs" id="runs" hidden></div>
 
   <div class="notice" id="notice" hidden></div>
 
@@ -324,9 +392,23 @@
   </footer>
 </div>
 
+<div class="results" id="results" hidden role="dialog" aria-modal="true" aria-labelledby="results-title">
+  <div class="results-panel">
+    <div class="results-head">
+      <span class="card-label" id="results-title">RESULTS — THE RECORDED SWEEP</span>
+      <button class="link" id="results-close">CLOSE</button>
+    </div>
+    <div class="results-body" id="results-body"></div>
+  </div>
+</div>
+
 <script src="traits.js"></script>
 <script src="world.js"></script>
 <script src="replay.example.js"></script>
+<!-- The published sweep: scores, spread and the paired comparison, generated by
+     tools/publish_showcase.py. Absent in a checkout that has not published one,
+     which is why nothing below may assume it exists. -->
+<script src="replays/index.js"></script>
 <script>
 (function () {
   "use strict";
@@ -353,6 +435,56 @@
     return fetch("data/replay.json")
       .then(function (r) { return r.ok ? r.json() : null; })
       .catch(function () { return null; });
+  }
+
+  // ── the published sweep ─────────────────────────────────────────────────
+  // replays/index.js, when one has been published. Everything below tolerates
+  // its absence: a checkout that has not run tools/publish_showcase.py is still
+  // the single-episode replay this page started as.
+  var RUNS = window.PLAGUE_RUNS || null;
+  var PRIMARY = RUNS ? RUNS.primary_metric : "victory_progress";
+
+  // One exhibition episode is loaded on demand, by injecting its <script>. It
+  // cannot be fetched: from file:// a browser blocks reading a local file, but
+  // never a script tag, which is the whole reason these ship as .js globals.
+  // Loading all of them up front would be ~2 MB for the one a reader watches.
+  function loadReplay(entry, done) {
+    var have = (window.PLAGUE_REPLAYS || {})[entry.key];
+    if (have) { done(have); return; }
+    if (!entry.src) { done(null); return; }
+    var tag = document.createElement("script");
+    tag.src = entry.src;
+    tag.onload = function () { done((window.PLAGUE_REPLAYS || {})[entry.key] || null); };
+    tag.onerror = function () { done(null); };
+    document.body.appendChild(tag);
+  }
+
+  function fixed(v, places) {
+    return v == null || isNaN(v) ? "—" : Number(v).toFixed(places == null ? 4 : places);
+  }
+  function signed(v, places) {
+    if (v == null || isNaN(v)) return "—";
+    return (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v).toFixed(places == null ? 4 : places);
+  }
+  function band(ci, places) {
+    return ci && ci.length === 2 ? "[" + signed(ci[0], places) + ", " + signed(ci[1], places) + "]" : "—";
+  }
+
+  // How a model reads against the baseline, on the paired test. `≈` is not a
+  // hedge: it is the finding for every local model in this sweep, and a picker
+  // that only marked winners would hide it.
+  function verdictMark(row) {
+    if (!RUNS || row.is_baseline) return { text: "baseline", cls: "flat", title: "the run everything else is compared against" };
+    var paired = row.paired && row.paired[PRIMARY];
+    if (!paired) return { text: "", cls: "flat", title: "" };
+    if (!paired.separated.paired) {
+      return { text: "≈", cls: "flat",
+               title: "not separated from the baseline: " + paired.verdict };
+    }
+    var up = paired.diff > 0;
+    return { text: up ? "▲" : "▼", cls: up ? "" : "down",
+             title: (up ? "beats" : "loses to") + " the baseline on the paired test — " +
+                    signed(paired.diff) + ", bootstrap " + band(paired.bootstrap_ci95) };
   }
 
   function pickEpisode(doc) {
@@ -496,7 +628,8 @@
   ["model","runmeta","outcome","notice","v-day","s-day","v-inf","s-inf","v-dead","s-dead",
    "v-cure","s-cure","v-countries","reasoning","reasoning-label","action-name","action-sub",
    "action-cost","dna-left","trait-count","trees","buys","counter","scrub","track-fill",
-   "playhead","chart-note","chart-end","p-head","prev","next","play","icon-play","icon-pause"
+   "playhead","chart-note","chart-end","p-head","prev","next","play","icon-play","icon-pause",
+   "runs","results","results-body","results-open","results-close"
   ].forEach(function (id) { el[id] = document.getElementById(id); });
 
   function pct(v) { return (v == null ? "—" : v.toFixed(1) + "%"); }
@@ -649,10 +782,150 @@
     });
   }
 
+  // ── picker ──────────────────────────────────────────────────────────────
+  var entries = [], current = null;
+
+  function chipFor(entry) {
+    var row = entry.row, mark = row ? verdictMark(row) : null;
+    var chip = document.createElement("button");
+    chip.className = "chip";
+    chip.type = "button";
+    chip.setAttribute("aria-pressed", "false");
+    chip.dataset.key = entry.key;
+    var name = document.createElement("span");
+    name.textContent = entry.label;
+    chip.appendChild(name);
+    if (row) {
+      var score = document.createElement("span");
+      score.className = "chip-score";
+      var metric = row.metrics && row.metrics[PRIMARY];
+      score.textContent = metric && metric.mean != null ? fixed(metric.mean) : "";
+      chip.appendChild(score);
+    }
+    if (mark && mark.text) {
+      var flag = document.createElement("span");
+      flag.className = "chip-mark " + mark.cls;
+      flag.textContent = mark.text;
+      chip.appendChild(flag);
+      chip.title = entry.label + " — " + mark.title;
+    }
+    if (!entry.playable) {
+      chip.disabled = true;
+      chip.title = entry.label + " — no exhibition episode published for this run, " +
+                   "so there is nothing to watch. Its numbers are under RESULTS.";
+    }
+    chip.addEventListener("click", function () { select(entry); });
+    return chip;
+  }
+
+  function buildPicker() {
+    if (!entries.length) return;
+    el.runs.innerHTML = "";
+    var label = document.createElement("span");
+    label.className = "kicker";
+    label.textContent = "MODEL";
+    el.runs.appendChild(label);
+    entries.forEach(function (entry) {
+      entry.chip = chipFor(entry);
+      el.runs.appendChild(entry.chip);
+    });
+    el.runs.hidden = false;
+  }
+
+  function markSelected(entry) {
+    current = entry;
+    entries.forEach(function (other) {
+      if (other.chip) other.chip.setAttribute("aria-pressed", other === entry ? "true" : "false");
+    });
+  }
+
+  function select(entry) {
+    if (!entry.playable) return;
+    markSelected(entry);
+    if (entry.doc) { start(entry.doc, entry); return; }
+    loadReplay(entry, function (doc) {
+      if (!doc) {
+        fail("Could not load <code>" + entry.src + "</code>. Run " +
+             "<code>python tools/publish_showcase.py</code> to regenerate it.");
+        return;
+      }
+      entry.doc = doc;
+      start(doc, entry);
+    });
+  }
+
+  // ── results ─────────────────────────────────────────────────────────────
+  function resultsRow(row) {
+    var metric = (row.metrics && row.metrics[PRIMARY]) || {};
+    var paired = row.paired && row.paired[PRIMARY];
+    var health = (row.action_health && row.action_health.rates) || {};
+    var mark = verdictMark(row);
+    var classes = (row.is_baseline ? "is-baseline " : "") +
+                  (current && current.row === row ? "is-current" : "");
+    var cells = [
+      "<td>" + row.label + "</td>",
+      "<td>" + row.episodes + "</td>",
+      "<td>" + fixed(metric.mean) + "</td>",
+      "<td>" + band(metric.ci95) + "</td>",
+      "<td class=\"" + (mark.cls || "up") + "\">" + (paired ? signed(paired.diff) : "—") + "</td>",
+      "<td>" + (paired ? band(paired.bootstrap_ci95) : "—") + "</td>",
+      "<td>" + (paired ? paired.seeds_won.wins + "/" + paired.seeds_won.decided : "—") + "</td>",
+      "<td class=\"" + (mark.cls || "up") + "\" title=\"" + (mark.title || "") + "\">" + (mark.text || "") + "</td>",
+      "<td>" + (health.rejected_rate == null ? "—" : (health.rejected_rate * 100).toFixed(1) + "%") + "</td>",
+      "<td>" + Math.round((row.wall_time_seconds || 0) / 60) + "m</td>"
+    ];
+    return "<tr class=\"" + classes + "\">" + cells.join("") + "</tr>";
+  }
+
+  function renderResults() {
+    if (!RUNS) return;
+    var head = ["model", "ep", PRIMARY, "95% CI", "vs base", "bootstrap 95%", "won", "", "rejected", "wall"];
+    var html =
+      "<div class=\"results-scroll\"><table class=\"tbl\"><thead><tr>" +
+      head.map(function (h) { return "<th>" + h + "</th>"; }).join("") +
+      "</tr></thead><tbody>" +
+      RUNS.runs.map(resultsRow).join("") +
+      "</tbody></table></div>";
+
+    html += "<p class=\"results-note\"><b>Every model played the same ten seeds</b>, and each " +
+      "episode's world comes from its own seed, so two runs' <code>Egypt</code> is one game " +
+      "played twice. <b>vs base</b> is the mean difference against " + RUNS.baseline.label +
+      " across those pairs, and the interval beside it is a " +
+      RUNS.bootstrap.resamples.toLocaleString() + "-resample percentile bootstrap on that " +
+      "difference. ▲ means it clears zero; ≈ means the sweep did not tell the two apart.</p>";
+    html += "<p class=\"results-note\">Seed difficulty varies far more than the models do, " +
+      "so the unpaired intervals in the <b>95% CI</b> column overlap in cases where the paired " +
+      "test separates cleanly. Both are shown because both are true: the paired one is the test " +
+      "that applies to shared seeds, and the wider reading is what a reader would otherwise " +
+      "compute for themselves and be misled by.</p>";
+    if (RUNS.superseded && RUNS.superseded.length) {
+      html += "<p class=\"results-note\"><b>Not in the table:</b> " +
+        RUNS.superseded.map(function (s) {
+          return s.run_id + ", replaced by " + s.superseded_by + (s.note ? " — " + s.note : "");
+        }).join("; ") + " It stays in <code>runs/</code> as evidence, not as a score.</p>";
+    }
+    el["results-body"].innerHTML = html;
+  }
+
+  function showResults(on) {
+    if (on) renderResults();
+    el.results.hidden = !on;
+  }
+
   // ── boot ────────────────────────────────────────────────────────────────
-  function start(doc, isSample) {
+  function start(doc, source) {
     var episode = pickEpisode(doc);
     if (!episode) { fail("This replay has no episodes with turns in it."); return; }
+
+    // Everything below re-runs when the picker switches model, so anything the
+    // last episode left behind has to go first: the transport keeps playing
+    // otherwise, and the ticks would accumulate one episode's marks on top of
+    // another's.
+    setPlaying(false);
+    state.buysRendered = -1;
+    el.notice.hidden = true;
+    var stale = document.getElementById("track").querySelectorAll(".tick");
+    for (var s = 0; s < stale.length; s++) stale[s].parentNode.removeChild(stale[s]);
 
     state.frames = toFrames(episode.turns);
     state.lastDay = state.frames[state.frames.length - 1].day || state.frames.length;
@@ -671,20 +944,37 @@
     var outcome = terminal.outcome || last.outcome || "running";
     var seed = doc.seed != null ? doc.seed : meta.seed;
 
+    var kind = (source && source.kind) || "export";
     var model = null;
     for (var i = 0; i < episode.turns.length && !model; i++) model = episode.turns[i].model;
     if (!model && doc.run && doc.run.config) model = doc.run.config.model;
-    el.model.textContent = model || (isSample ? "reference expert policy" : "[unknown model]");
-    el.runmeta.textContent = (seed != null ? "seed " + seed + " · " : "") + state.frames.length + " turns";
+    // An exhibition is titled by the run it belongs to: the export's own
+    // `run.config.model` says `openai/gemma-4-31b-it`, which names the wire
+    // protocol rather than the vendor.
+    if (kind === "exhibition" && source.label) model = source.label;
+    el.model.textContent = model || (kind === "sample" ? "reference expert policy" : "[unknown model]");
+    el.runmeta.textContent = (seed != null ? "seed " + seed + " · " : "") +
+      state.frames.length + " turns" + (kind === "exhibition" ? " · exhibition" : "");
     el.outcome.textContent = outcome;
     el.outcome.setAttribute("data-outcome", outcome);
 
-    if (isSample) {
+    if (kind === "sample") {
       el.notice.hidden = false;
       el.notice.innerHTML = "<b>Sample episode.</b> No benchmarked run is bundled yet, " +
         "so this is the reference expert policy from <code>tools/calibrate.py</code> — not a language model. " +
         "Its reasoning text is derived from the policy's own rule. Export a real run to " +
         "<code>showcase/data/replay.json</code> and this page will use it instead.";
+    } else if (kind === "exhibition") {
+      // The distinction the whole publication rests on. This episode was played
+      // again to be watchable; the ten that produced the score were not
+      // recorded turn by turn, and re-running one does not reproduce it.
+      el.notice.hidden = false;
+      el.notice.innerHTML = "<b>Exhibition episode.</b> One episode on seed " +
+        (RUNS ? RUNS.featured_seed : seed) + ", played again so there is something to watch — " +
+        "<b>not</b> one of the ten scored seeds, and its outcome here is its own. " +
+        "The recorded sweep is under <a href=\"#\" id=\"notice-results\">RESULTS</a>.";
+      var link = document.getElementById("notice-results");
+      if (link) link.addEventListener("click", function (ev) { ev.preventDefault(); showResults(true); });
     }
 
     el["chart-end"].textContent = "day " + state.lastDay;
@@ -704,8 +994,9 @@
     });
 
     el.scrub.max = state.frames.length - 1;
-    wire();
+    if (!state.wired) { wire(); state.wired = true; }
     go(0);
+    if (!el.results.hidden) renderResults();
   }
 
   function fail(message) {
@@ -713,11 +1004,59 @@
     el.notice.innerHTML = "<b>No replay loaded.</b> " + message;
   }
 
+  // Every run in the published sweep gets an entry, whether or not an
+  // exhibition episode exists for it: a model with no replay still belongs in
+  // the picker, greyed out, because its absence is a fact about the
+  // publication rather than about the model.
+  function buildEntries(local) {
+    var list = [];
+    if (local) {
+      list.push({ key: "local", label: "local export", kind: "export",
+                  playable: true, doc: local, row: null });
+    }
+    if (RUNS) {
+      RUNS.runs.forEach(function (row) {
+        list.push({
+          key: row.replay || row.run_id,
+          label: row.label,
+          kind: "exhibition",
+          playable: !!row.replay,
+          src: row.replay ? "replays/" + row.replay_file : null,
+          row: row
+        });
+      });
+    }
+    return list;
+  }
+
+  function boot(local) {
+    entries = buildEntries(local);
+    if (RUNS) {
+      el["results-open"].hidden = false;
+      el["results-open"].addEventListener("click", function () { showResults(true); });
+      el["results-close"].addEventListener("click", function () { showResults(false); });
+      el.results.addEventListener("click", function (ev) {
+        if (ev.target === el.results) showResults(false);
+      });
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape" && !el.results.hidden) showResults(false);
+      });
+    }
+    if (entries.length) buildPicker();
+
+    var first = null;
+    for (var i = 0; i < entries.length && !first; i++) if (entries[i].playable) first = entries[i];
+    if (first) { select(first); return; }
+    if (window.PLAGUE_SAMPLE_REPLAY) {
+      start(window.PLAGUE_SAMPLE_REPLAY, { kind: "sample" });
+      return;
+    }
+    fail("Neither a published run, data/replay.json nor the bundled sample could be read.");
+  }
+
   buildMap(window.PLAGUE_WORLD || []);
   loadReal().then(function (real) {
-    if (real && real.replay) { start(real, false); return; }
-    if (window.PLAGUE_SAMPLE_REPLAY) { start(window.PLAGUE_SAMPLE_REPLAY, true); return; }
-    fail("Neither data/replay.json nor the bundled sample could be read.");
+    boot(real && real.replay ? real : null);
   });
 })();
 </script>

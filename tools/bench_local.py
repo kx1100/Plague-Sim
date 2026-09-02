@@ -999,7 +999,7 @@ def _incomplete_score(turns: list[dict]) -> dict:
 # seed sweep has df=9, where the normal 1.96 understates the interval by about
 # 15% -- the difference between two models reading as tied and reading as
 # ranked. Past df=30 the gap stops mattering and 1.96 is used.
-_T95 = {
+T95 = {
     1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365,
     8: 2.306, 9: 2.262, 10: 2.228, 11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145,
     15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086,
@@ -1028,7 +1028,7 @@ def _spread(values: list[float]) -> dict:
     mean = sum(values) / n
     sd = statistics.stdev(values)
     sem = sd / math.sqrt(n)
-    half = _T95.get(n - 1, 1.96) * sem
+    half = T95.get(n - 1, 1.96) * sem
     return {
         "sd": round(sd, 6),
         "sem": round(sem, 6),
