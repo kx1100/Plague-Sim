@@ -172,6 +172,132 @@ def test_a_deliberate_null_is_still_told_apart_from_a_truncated_reply():
     assert action is None and not reasoning.strip()      # -> unparsed
 
 
+# ── Crash safety ──────────────────────────────────────────────────────────────
+#
+# These two drive `main()` end to end against a running adapter, because the
+# property under test is where the record is written relative to the episode
+# loop -- which only the real wiring can show. Skipped, not failed, when no
+# adapter is up: the rest of the suite must stay runnable without one.
+
+def _adapter_up() -> bool:
+    from tools.bench_local import EnvClient
+    return EnvClient("http://localhost:8765").health()
+
+
+needs_adapter = pytest.mark.skipif(
+    not _adapter_up(), reason="no adapter on :8765 (python adapter.py)"
+)
+
+
+
+@needs_adapter
+def test_a_crash_mid_sweep_keeps_the_episodes_that_finished(tmp_path, monkeypatch):
+    """
+    The record used to be written only after the final episode, so an
+    unhandled error on episode four destroyed the three that had already
+    finished -- four hours of a paid sweep, gone to a dropped TCP connection.
+    A failure must now stop the run the way a tripped guard does.
+    """
+    from tools import bench_local
+    import json
+
+    calls = {"n": 0}
+    real = bench_local.run_episode
+
+    def flaky(env, agent, seed, budget, args):
+        calls["n"] += 1
+        if calls["n"] == 3:
+            raise ConnectionResetError(10054, "forcibly closed by the remote host")
+        return real(env, agent, seed, budget, args)
+
+    monkeypatch.setattr(bench_local, "run_episode", flaky)
+    monkeypatch.setattr(bench_local.sys, "argv", [
+        "bench_local.py", "--model", "policy/random",
+        "--seeds", "India,China,USA,Brazil",
+        "--max-steps", "40", "--runs-dir", str(tmp_path), "--quiet",
+    ])
+    bench_local.main()
+
+    written = list(tmp_path.glob("*/run.json"))
+    assert len(written) == 1, "one run_id for the sweep, not one per episode"
+    record = json.loads(written[0].read_text(encoding="utf-8"))
+    assert record["result"]["episodes_completed"] == 2
+    assert [ep["seed"] for ep in record["episodes"]] == ["India", "China"]
+    assert record["result"]["stopped"].startswith("error: ConnectionResetError")
+
+
+@needs_adapter
+def test_each_finished_episode_is_checkpointed_as_it_lands(tmp_path, monkeypatch):
+    """Not just saved on the way out: a hard kill must not cost them either."""
+    from tools import bench_local
+    import json
+
+    seen = []
+    real = bench_local.run_episode
+
+    def watch(env, agent, seed, budget, args):
+        # What is on disk *before* this episode runs is what the previous one left.
+        found = list(tmp_path.glob("*/run.json"))
+        seen.append(
+            json.loads(found[0].read_text(encoding="utf-8"))["result"]["episodes_completed"]
+            if found else 0
+        )
+        return real(env, agent, seed, budget, args)
+
+    monkeypatch.setattr(bench_local, "run_episode", watch)
+    monkeypatch.setattr(bench_local.sys, "argv", [
+        "bench_local.py", "--model", "policy/random", "--seeds", "India,China,USA",
+        "--max-steps", "40", "--runs-dir", str(tmp_path), "--quiet",
+    ])
+    bench_local.main()
+    assert seen == [0, 1, 2], f"record should grow by one per episode, saw {seen}"
+
+
+# ── Network failures ──────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("exc", [
+    __import__("http.client", fromlist=["x"]).RemoteDisconnected(
+        "Remote end closed connection without response"),
+    ConnectionResetError(10054, "forcibly closed by the remote host"),
+    __import__("http.client", fromlist=["x"]).BadStatusLine("''"),
+    TimeoutError("timed out"),
+])
+def test_a_dropped_connection_is_retryable_rather_than_fatal(monkeypatch, exc):
+    """
+    urllib wraps what `request()` raises but re-raises whatever
+    `getresponse()` throws, so a connection dropped mid-response arrives as a
+    bare RemoteDisconnected rather than a URLError. Uncaught it escaped the
+    retry loop, escaped run_episode, and ended a four-hour sweep on episode
+    four -- destroying the three that had finished.
+    """
+    from tools import bench_local
+
+    def boom(*a, **k):
+        raise exc
+
+    monkeypatch.setattr(bench_local.urllib.request, "urlopen", boom)
+    with pytest.raises(bench_local.TransientAgentError):
+        bench_local._post_json("https://example.com/v1", {}, timeout=5)
+
+
+def test_a_transient_network_failure_is_retried_to_the_limit(monkeypatch):
+    """Retried, and only fatal once the retries are spent."""
+    from tools import bench_local
+    calls = []
+
+    class Flaky(bench_local._PromptedAgent):
+        def _call(self, user):
+            calls.append(user)
+            raise bench_local.TransientAgentError("dropped")
+
+    agent = Flaky("m", "sys", Budget(max_calls=0, max_cost=0, price_in=0, price_out=0),
+                  retries=2)
+    monkeypatch.setattr(bench_local.time, "sleep", lambda _s: None)
+    with pytest.raises(bench_local.FatalAgentError):
+        agent.complete("go")
+    assert len(calls) == 3          # the first attempt plus two retries
+
+
 # ── Rate pacing ───────────────────────────────────────────────────────────────
 #
 # The limiter is tested through `_delay`, with timestamps placed by hand, so a

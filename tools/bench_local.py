@@ -41,6 +41,7 @@ git SHA. `--no-save` turns that off; see tools/run_store.py.
 """
 
 import argparse
+import http.client
 import json
 import math
 import os
@@ -765,6 +766,14 @@ def _post_json(url: str, payload: dict, timeout: float, headers: dict | None = N
         return exc.read().decode("utf-8", "replace"), exc.code
     except urllib.error.URLError as exc:
         raise TransientAgentError(f"cannot reach {url}: {exc.reason}")
+    except (http.client.HTTPException, OSError) as exc:
+        # A connection dropped *mid-response* lands here rather than as a
+        # URLError: urllib wraps what `request()` raises, but re-raises
+        # whatever `getresponse()` throws. RemoteDisconnected is the common
+        # one, and it is exactly the "connection dropped" case this error
+        # class exists for -- uncaught it escaped the retry loop, escaped
+        # run_episode, and took a four-hour sweep down with it.
+        raise TransientAgentError(f"{type(exc).__name__} from {url}: {exc}")
 
 
 class EnvClient:
@@ -1395,9 +1404,53 @@ def main() -> int:
 
     episodes, stopped = [], None
     started = time.time()
+    # One run_id for the whole sweep, allocated up front: the record is
+    # rewritten after every episode, and re-allocating each time would scatter
+    # a single run across ten directories.
+    runs_dir = Path(args.runs_dir)
+    run_id = run_store.allocate_run_id(args.model, runs_dir) if args.save_run else None
+
+    def checkpoint(reason):
+        """Write what has finished so far.
+
+        A sweep is hours long, and its record used to be written only after the
+        final episode -- so any failure in between destroyed every completed
+        episode along with it. Ten hours of finished work must not depend on
+        the eleventh hour succeeding.
+        """
+        if not (args.save_run and episodes):
+            return None
+        record = run_store.build_run_record(
+            run_id=run_id, args=args, agent_description=agent.describe(),
+            system_prompt=system_prompt, manifest=manifest,
+            manifest_text=manifest_text, seeds=seeds, episodes=episodes,
+            budget=budget, metrics=metric_means(manifest, episodes),
+            outcomes=outcome_counts(episodes), health=health_with_rates(episodes),
+            wall_time=time.time() - started, model_provenance=agent.provenance(),
+            stopped=reason, runs_dir=runs_dir,
+        )
+        written = run_store.save_run(record, runs_dir)
+        run_store.append_to_index(record, written, runs_dir)
+        return written
+
     for index, seed in enumerate(seeds, 1):
         print(f"[{index}/{len(seeds)}] seed {seed!r}")
-        record = run_episode(env, agent, seed, budget, args)
+        try:
+            record = run_episode(env, agent, seed, budget, args)
+        except KeyboardInterrupt:
+            stopped = "interrupted"
+            print(f"  interrupted during {seed!r} — keeping the "
+                  f"{len(episodes)} episode(s) already finished", file=sys.stderr)
+            break
+        except Exception as exc:
+            # Anything unhandled. The sweep stops the way a tripped guard does:
+            # finished episodes intact and the reason recorded, rather than a
+            # traceback thrown over four hours of completed work.
+            stopped = f"error: {type(exc).__name__}: {exc}"
+            print(f"  {seed!r} failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            print(f"  keeping the {len(episodes)} episode(s) already finished",
+                  file=sys.stderr)
+            break
         episodes.append(record)
         score = record["score"] or {}
         print(
@@ -1407,6 +1460,7 @@ def main() -> int:
         )
         if agent.uses_model:
             print(f"      actions: {action_health([record])[0]}")
+        checkpoint(None)
         if record["truncated"]:
             stopped = record["truncated"]
             break
@@ -1442,29 +1496,10 @@ def main() -> int:
     print()
     print("  outcomes: " + ", ".join(f"{k} x{v}" for k, v in outcomes.items()))
 
-    if args.save_run and episodes:
-        runs_dir = Path(args.runs_dir)
-        record = run_store.build_run_record(
-            run_id=run_store.allocate_run_id(args.model, runs_dir),
-            args=args,
-            agent_description=agent.describe(),
-            system_prompt=system_prompt,
-            manifest=manifest,
-            manifest_text=manifest_text,
-            seeds=seeds,
-            episodes=episodes,
-            budget=budget,
-            metrics=metric_means(manifest, episodes),
-            outcomes=outcomes,
-            health=health_with_rates(episodes),
-            wall_time=elapsed,
-            model_provenance=agent.provenance(),
-            stopped=stopped,
-            runs_dir=runs_dir,
-        )
-        saved = run_store.save_run(record, runs_dir)
-        index = run_store.append_to_index(record, saved, runs_dir)
-        print(f"\n  recorded {_display_path(saved)} (+ {_display_path(index)})")
+    saved = checkpoint(stopped)
+    if saved:
+        index_path = runs_dir / "index.json"
+        print(f"\n  recorded {_display_path(saved)} (+ {_display_path(index_path)})")
 
     if args.export:
         path = Path(args.export)
