@@ -251,6 +251,9 @@ of its moves; it stays in the repo as the evidence for that fix, not as a score.
 
 ## Watching a run back
 
+**Live: [kx1100.github.io/Plague-Sim](https://kx1100.github.io/Plague-Sim/)** —
+no install, no key, nothing to run.
+
 [showcase/index.html](showcase/index.html) replays one episode day by day --
 the chart, a 71-country map, the model's reasoning and the trait it bought each
 turn, with a picker to switch between models and a **RESULTS** panel carrying
@@ -350,6 +353,7 @@ constant to move — in small increments, re-running the harness each time.
 ## Repo layout
 
 ```
+index.html             redirect to showcase/ — GitHub Pages serves the repo root
 env.py                 PlagueEnv: reset/step/observation/final_score
 adapter.py             HTTP wrapper (port 8765)
 run.py                 passive baseline runner

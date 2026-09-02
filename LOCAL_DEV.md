@@ -197,6 +197,28 @@ reads, so the replay UI works without a platform run too:
 python tools/bench_local.py --model ollama/llama3.2 --episodes 1   --export showcase/data/replay.json
 ```
 
+## Publish the showcase
+
+The page is static and self-contained, so GitHub Pages serves it with no build
+step and no workflow. Two files at the repo root make that work:
+
+| file | why |
+|---|---|
+| `index.html` | Pages serves the repo root, and the replay lives in `showcase/`. This redirects there, so the Pages URL is not a 404. |
+| `.nojekyll` | stops Pages running the tree through Jekyll, which otherwise skips paths beginning with `_` and adds a build step that can only break things |
+
+Then, once: **Settings → Pages → Build and deployment → Deploy from a branch →
+`main` / `(root)` → Save.** The first build takes a minute or two, after which
+<https://kx1100.github.io/Plague-Sim/> lands on the replay. Pages on a private
+repo needs a paid plan; on a public one it is free.
+
+Re-publish the data whenever a run is added, retired or re-scored — Pages serves
+what is committed, so a stale `showcase/replays/` is a stale page:
+
+```bash
+python tools/publish_showcase.py
+```
+
 ## Ship to Mesocosm
 
 When local runs look good:
